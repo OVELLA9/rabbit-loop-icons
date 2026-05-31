@@ -75,6 +75,70 @@ export default async function Page() {
         <IconBuilder isPremium={premium} />
       </main>
 
+      {/* Landing / SEO section */}
+      <section className="border-t border-white/[0.06] px-4 sm:px-8 py-16 max-w-6xl mx-auto w-full">
+        <div className="max-w-3xl">
+          <h2 className="text-2xl sm:text-3xl font-bold text-white tracking-tight mb-4">
+            Free app icon maker — no download, no account required
+          </h2>
+          <p className="text-gray-500 text-sm leading-relaxed mb-10">
+            Icon Builder is a free, browser-based tool for creating app icons for iOS and Android.
+            Add emojis, Unicode symbols, or custom text to a 1024×1024 canvas, then export a
+            production-ready PNG in seconds. Everything runs in your browser — nothing is uploaded
+            to any server.
+          </p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-12">
+            {[
+              {
+                title: 'Drag, resize and rotate',
+                body:  'Place any emoji or symbol on the canvas and freely position it. Resize and rotate with simple handles — snap guides keep everything aligned.',
+              },
+              {
+                title: 'Exports at 1024×1024',
+                body:  'Export your icon at the full resolution required by the App Store and Google Play. Download standard, dark mode, and tinted variants in one click.',
+              },
+              {
+                title: 'Works in any browser',
+                body:  'No app to install, no account needed. Open the tool, build your icon, and export — it works on Mac, Windows, iPad, or any modern browser.',
+              },
+            ].map(f => (
+              <div key={f.title} className="space-y-2">
+                <h3 className="text-white text-sm font-semibold">{f.title}</h3>
+                <p className="text-gray-600 text-xs leading-relaxed">{f.body}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="border-t border-white/[0.04] pt-10">
+            <h3 className="text-white text-sm font-semibold mb-4">How it works</h3>
+            <ol className="space-y-2 text-gray-600 text-xs leading-relaxed list-decimal list-inside">
+              <li>Pick an emoji or symbol from the picker, or type your own text</li>
+              <li>Drag it into position on the canvas — snap guides help with alignment</li>
+              <li>Adjust the size, rotation, and colour using the toolbar</li>
+              <li>Preview your icon in an iPhone and Android home screen mock-up</li>
+              <li>Export as PNG at 1024×1024 — ready to upload to App Store Connect or Google Play</li>
+            </ol>
+          </div>
+
+          <div className="border-t border-white/[0.04] pt-10 mt-10">
+            <h3 className="text-white text-sm font-semibold mb-3">Free vs Premium</h3>
+            <p className="text-gray-600 text-xs leading-relaxed">
+              Icon Builder is free to use with no account required. Free exports include a small
+              watermark in the corner.{' '}
+              <a
+                href={`${APP_URL?.replace('icons.', '')}/premium`}
+                className="text-gray-400 hover:text-white underline underline-offset-4 transition-colors"
+              >
+                Rabbit Loop Premium
+              </a>{' '}
+              removes the watermark and unlocks watermark-free exports for all three variants
+              (standard, dark, and tinted).
+            </p>
+          </div>
+        </div>
+      </section>
+
       {/* Footer */}
       <footer className="border-t border-white/[0.06] px-4 sm:px-8 py-4 text-center">
         <p className="text-xs text-gray-700">

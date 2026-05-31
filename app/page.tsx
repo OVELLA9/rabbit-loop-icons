@@ -1,4 +1,4 @@
-import { getSession, isPremiumUser } from '@/lib/session'
+import { getSession, isPremiumUser, registerConnectedApp } from '@/lib/session'
 import IconBuilder from '@/components/IconBuilder'
 
 export const dynamic = 'force-dynamic'
@@ -9,6 +9,7 @@ const APP_URL  = process.env.NEXT_PUBLIC_APP_URL  ?? 'https://icons.rabbit-loop.
 export default async function Page() {
   const user    = await getSession()
   const premium = user ? await isPremiumUser(user.id) : false
+  if (user) registerConnectedApp(user.id)
 
   return (
     <div className="min-h-screen flex flex-col">

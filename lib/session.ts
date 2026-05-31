@@ -24,6 +24,23 @@ export async function getSession(): Promise<SessionUser | null> {
   }
 }
 
+export async function registerConnectedApp(userId: string): Promise<void> {
+  try {
+    const db = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    )
+    await db.from('connected_apps').upsert({
+      user_id:   userId,
+      app_name:  'Icon Builder',
+      app_url:   'https://icons.rabbit-loop.com',
+      last_seen: new Date().toISOString(),
+    }, { onConflict: 'user_id,app_url' })
+  } catch {
+    // Non-fatal — don't block the page
+  }
+}
+
 export async function isPremiumUser(userId: string): Promise<boolean> {
   try {
     const db = createClient(

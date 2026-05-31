@@ -24,13 +24,16 @@ export async function getSession(): Promise<SessionUser | null> {
   }
 }
 
+function adminClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  )
+}
+
 export async function registerConnectedApp(userId: string): Promise<void> {
   try {
-    const db = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    )
-    await db.from('connected_apps').upsert({
+    await adminClient().from('connected_apps').upsert({
       user_id:   userId,
       app_name:  'Icon Builder',
       app_url:   'https://icons.rabbit-loop.com',
@@ -43,11 +46,7 @@ export async function registerConnectedApp(userId: string): Promise<void> {
 
 export async function isPremiumUser(userId: string): Promise<boolean> {
   try {
-    const db = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    )
-    const { data } = await db
+    const { data } = await adminClient()
       .from('subscriptions')
       .select('status')
       .eq('user_id', userId)

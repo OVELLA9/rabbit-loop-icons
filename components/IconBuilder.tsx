@@ -437,13 +437,11 @@ export default function IconBuilder({ isPremium = false }: { isPremium?: boolean
             <div className="w-px h-5 bg-gray-700" />
             <button onClick={sendBack}    className="px-2.5 py-1.5 bg-gray-800 hover:bg-gray-700 text-white text-sm rounded-lg">↓ Back</button>
             <button onClick={bringForward} className="px-2.5 py-1.5 bg-gray-800 hover:bg-gray-700 text-white text-sm rounded-lg">↑ Forward</button>
-            {selected.type === 'text' && (
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs text-gray-400">Colour</span>
-                <input type="color" value={selected.color} onChange={e => update(selected.id, { color: e.target.value })}
-                  className="w-7 h-7 rounded cursor-pointer bg-transparent border-0" />
-              </div>
-            )}
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-gray-400">Colour</span>
+              <input type="color" value={selected.color} onChange={e => update(selected.id, { color: e.target.value })}
+                className="w-7 h-7 rounded cursor-pointer bg-transparent border-0" />
+            </div>
             <button onClick={deleteSelected} className="px-2.5 py-1.5 bg-red-950 hover:bg-red-900 text-red-400 text-sm rounded-lg">Delete</button>
           </>
         )}

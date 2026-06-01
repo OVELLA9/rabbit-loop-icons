@@ -626,7 +626,9 @@ export default function IconBuilder({ isPremium = false }: { isPremium?: boolean
                   transform: `translate(-50%, -50%) rotate(${el.rotation}deg)`,
                   cursor: dragging?.id === el.id ? 'grabbing' : 'grab',
                   lineHeight: 1, userSelect: 'none', color: el.color,
-                  whiteSpace: 'nowrap', fontWeight: el.type === 'text' ? 700 : undefined,
+                  whiteSpace: 'nowrap',
+                  fontFamily: el.type === 'text' ? (el.fontFamily ?? FONTS[0].value) : undefined,
+                  fontWeight: el.type === 'text' ? (FONTS.find(f => f.value === el.fontFamily)?.weight ?? 'bold') : undefined,
                   zIndex: isSel ? 10 : undefined,
                 }}
                   onMouseDown={e => onElementMouseDown(e, el.id)}

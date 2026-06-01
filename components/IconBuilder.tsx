@@ -449,7 +449,7 @@ function ImagePreview({ dataUrl, color, size }: { dataUrl: string; color: string
     }
     img.src = dataUrl
   }, [dataUrl, color, size])
-  return <canvas ref={ref} style={{ display: 'block', pointerEvents: 'none' }} />
+  return <canvas ref={ref} style={{ display: 'block', pointerEvents: 'none', position: 'absolute', top: 0, left: 0 }} />
 }
 
 export default function IconBuilder({ isPremium = false }: { isPremium?: boolean }) {
@@ -888,12 +888,12 @@ export default function IconBuilder({ isPremium = false }: { isPremium?: boolean
                       <div title="Drag to rotate" style={{
                         position: 'absolute', top: -22, left: '50%', transform: 'translateX(-50%)',
                         width: 14, height: 14, background: '#3b82f6', border: '2px solid #fff',
-                        borderRadius: '50%', cursor: 'crosshair', zIndex: 20,
+                        borderRadius: '50%', cursor: 'crosshair', zIndex: 100,
                       }} onMouseDown={e => { e.stopPropagation(); onRotateMouseDown(e, el.id) }} />
                       <div title="Drag to resize" style={{
                         position: 'absolute', bottom: -10, right: -10,
                         width: 14, height: 14, background: '#fff', border: '2px solid #3b82f6',
-                        borderRadius: 3, cursor: 'se-resize', zIndex: 20,
+                        borderRadius: 3, cursor: 'se-resize', zIndex: 100,
                       }} onMouseDown={e => { e.stopPropagation(); onResizeMouseDown(e, el.id) }} />
                     </>
                   )}

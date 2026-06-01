@@ -449,7 +449,7 @@ function ImagePreview({ dataUrl, color, size }: { dataUrl: string; color: string
     }
     img.src = dataUrl
   }, [dataUrl, color, size])
-  return <canvas ref={ref} style={{ display: 'block', pointerEvents: 'none', position: 'absolute', top: 0, left: 0 }} />
+  return <canvas ref={ref} style={{ display: 'block', pointerEvents: 'none' }} />
 }
 
 export default function IconBuilder({ isPremium = false }: { isPremium?: boolean }) {
@@ -860,17 +860,18 @@ export default function IconBuilder({ isPremium = false }: { isPremium?: boolean
 
             {elements.map(el => {
               const isSel = selectedId === el.id
+              const isImg = el.type === 'image'
               return (
                 <div key={el.id} style={{
                   position: 'absolute', left: el.x * SCALE, top: el.y * SCALE,
-                  fontSize: el.type === 'image' ? undefined : el.fontSize * SCALE,
-                  width:    el.type === 'image' ? el.fontSize * SCALE : undefined,
-                  height:   el.type === 'image' ? el.fontSize * SCALE : undefined,
+                  fontSize: isImg ? undefined : el.fontSize * SCALE,
+                  width:    isImg ? el.fontSize * SCALE : undefined,
+                  height:   isImg ? el.fontSize * SCALE : undefined,
                   transform: `translate(-50%, -50%) rotate(${el.rotation}deg)`,
                   cursor: dragging?.id === el.id ? 'grabbing' : 'grab',
                   lineHeight: 1, userSelect: 'none',
-                  color:      el.type === 'image' ? 'transparent' : el.color,
-                  overflow:   el.type === 'image' ? 'visible' : 'hidden',
+                  color:      isImg ? 'transparent' : el.color,
+                  overflow:   'hidden',
                   whiteSpace: 'nowrap',
                   fontFamily: el.type === 'text' ? (el.fontFamily ?? FONTS[0].value) : undefined,
                   fontWeight: el.type === 'text' ? (FONTS.find(f => f.value === el.fontFamily)?.weight ?? 'bold') : undefined,
@@ -879,27 +880,58 @@ export default function IconBuilder({ isPremium = false }: { isPremium?: boolean
                   onMouseDown={e => onElementMouseDown(e, el.id)}
                   onClick={e => e.stopPropagation()}
                 >
-                  {el.type === 'image' && el.dataUrl ? (
+                  {isImg && el.dataUrl ? (
                     <ImagePreview dataUrl={el.dataUrl} color={el.color} size={el.fontSize * SCALE} />
                   ) : el.content}
-                  {isSel && (
+                  {/* Selection UI for text/emoji stays inside — image elements use the overlay below */}
+                  {isSel && !isImg && (
                     <>
                       <div style={{ position: 'absolute', inset: -8, border: '1.5px solid rgba(255,255,255,0.35)', borderRadius: 6, pointerEvents: 'none' }} />
                       <div title="Drag to rotate" style={{
                         position: 'absolute', top: -22, left: '50%', transform: 'translateX(-50%)',
                         width: 14, height: 14, background: '#3b82f6', border: '2px solid #fff',
-                        borderRadius: '50%', cursor: 'crosshair', zIndex: 100,
+                        borderRadius: '50%', cursor: 'crosshair', zIndex: 20,
                       }} onMouseDown={e => { e.stopPropagation(); onRotateMouseDown(e, el.id) }} />
                       <div title="Drag to resize" style={{
                         position: 'absolute', bottom: -10, right: -10,
                         width: 14, height: 14, background: '#fff', border: '2px solid #3b82f6',
-                        borderRadius: 3, cursor: 'se-resize', zIndex: 100,
+                        borderRadius: 3, cursor: 'se-resize', zIndex: 20,
                       }} onMouseDown={e => { e.stopPropagation(); onResizeMouseDown(e, el.id) }} />
                     </>
                   )}
                 </div>
               )
             })}
+
+            {/* Image element selection overlay — separate layer so it's always above the canvas */}
+            {selected?.type === 'image' && (
+              <div style={{
+                position: 'absolute',
+                left: selected.x * SCALE,
+                top: selected.y * SCALE,
+                width: selected.fontSize * SCALE,
+                height: selected.fontSize * SCALE,
+                transform: `translate(-50%, -50%) rotate(${selected.rotation}deg)`,
+                zIndex: 50,
+                pointerEvents: 'none',
+              }}>
+                <div style={{
+                  position: 'absolute', inset: -8,
+                  border: '1.5px dashed rgba(255,255,255,0.5)',
+                  borderRadius: 6, pointerEvents: 'none',
+                }} />
+                <div title="Drag to rotate" style={{
+                  position: 'absolute', top: -22, left: '50%', transform: 'translateX(-50%)',
+                  width: 14, height: 14, background: '#3b82f6', border: '2px solid #fff',
+                  borderRadius: '50%', cursor: 'crosshair', pointerEvents: 'all',
+                }} onMouseDown={e => { e.stopPropagation(); onRotateMouseDown(e, selected.id) }} />
+                <div title="Drag to resize" style={{
+                  position: 'absolute', bottom: -10, right: -10,
+                  width: 14, height: 14, background: '#fff', border: '2px solid #3b82f6',
+                  borderRadius: 3, cursor: 'se-resize', pointerEvents: 'all',
+                }} onMouseDown={e => { e.stopPropagation(); onResizeMouseDown(e, selected.id) }} />
+              </div>
+            )}
           </div>
           <p className="text-center text-xs text-gray-600 mt-2">512px preview — exports at 1024×1024</p>
         </div>

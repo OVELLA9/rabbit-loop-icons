@@ -883,10 +883,8 @@ export default function IconBuilder({ isPremium = false }: { isPremium?: boolean
                   {isImg && el.dataUrl ? (
                     <ImagePreview dataUrl={el.dataUrl} color={el.color} size={el.fontSize * SCALE} />
                   ) : el.content}
-                  {/* Selection UI for text/emoji stays inside — image elements use the overlay below */}
                   {isSel && !isImg && (
                     <>
-                      <div style={{ position: 'absolute', inset: -8, border: '1.5px solid rgba(255,255,255,0.35)', borderRadius: 6, pointerEvents: 'none' }} />
                       <div title="Drag to rotate" style={{
                         position: 'absolute', top: -22, left: '50%', transform: 'translateX(-50%)',
                         width: 14, height: 14, background: '#3b82f6', border: '2px solid #fff',

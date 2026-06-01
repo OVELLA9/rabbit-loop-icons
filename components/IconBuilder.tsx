@@ -871,7 +871,7 @@ export default function IconBuilder({ isPremium = false }: { isPremium?: boolean
                   cursor: dragging?.id === el.id ? 'grabbing' : 'grab',
                   lineHeight: 1, userSelect: 'none',
                   color:      isImg ? 'transparent' : el.color,
-                  overflow:   isImg ? 'visible' : 'hidden',
+                  overflow:   'visible',
                   whiteSpace: 'nowrap',
                   fontFamily: el.type === 'text' ? (el.fontFamily ?? FONTS[0].value) : undefined,
                   fontWeight: el.type === 'text' ? (FONTS.find(f => f.value === el.fontFamily)?.weight ?? 'bold') : undefined,

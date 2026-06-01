@@ -97,7 +97,15 @@ function processImageToSilhouette(file: File): Promise<string> {
         }
 
         ctx.putImageData(id, 0, 0)
-        resolve(c.toDataURL())
+
+        // Pad into a square with 8% margin so the silhouette doesn't touch the container edges
+        const pad     = Math.round(Math.max(w, h) * 0.08)
+        const sqSize  = Math.max(w, h) + pad * 2
+        const sq      = document.createElement('canvas')
+        sq.width = sq.height = sqSize
+        const sqCtx   = sq.getContext('2d')!
+        sqCtx.drawImage(c, pad + Math.round((Math.max(w, h) - w) / 2), pad + Math.round((Math.max(w, h) - h) / 2))
+        resolve(sq.toDataURL())
       }
       img.src = ev.target!.result as string
     }
@@ -862,7 +870,7 @@ export default function IconBuilder({ isPremium = false }: { isPremium?: boolean
                   cursor: dragging?.id === el.id ? 'grabbing' : 'grab',
                   lineHeight: 1, userSelect: 'none',
                   color:      el.type === 'image' ? 'transparent' : el.color,
-                  overflow:   'hidden',
+                  overflow:   el.type === 'image' ? 'visible' : 'hidden',
                   whiteSpace: 'nowrap',
                   fontFamily: el.type === 'text' ? (el.fontFamily ?? FONTS[0].value) : undefined,
                   fontWeight: el.type === 'text' ? (FONTS.find(f => f.value === el.fontFamily)?.weight ?? 'bold') : undefined,

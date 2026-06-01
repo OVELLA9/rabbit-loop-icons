@@ -19,7 +19,7 @@ export default async function Page() {
       {/* Header */}
       <header className="border-b border-white/[0.06] px-4 sm:px-8 py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <img src="https://auth.rabbit-loop.com/logo.png" alt="Rabbit Loop" className="w-7 h-7 rounded-lg" />
+          <img src="/logo.png" alt="Rabbit Loop" className="w-7 h-7 rounded-lg" />
           <div>
             <span className="text-white font-semibold text-sm">Icon Builder</span>
             <span className="text-gray-600 text-xs ml-2">by Rabbit Loop</span>

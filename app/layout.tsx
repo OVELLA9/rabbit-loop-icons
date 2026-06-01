@@ -14,13 +14,13 @@ export const metadata: Metadata = {
     siteName:    'Rabbit Loop Icon Builder',
     locale:      'en_AU',
     type:        'website',
-    images: [{ url: 'https://auth.rabbit-loop.com/logo.png', width: 512, height: 512, alt: 'Rabbit Loop Icon Builder' }],
+    images: [{ url: 'https://icons.rabbit-loop.com/logo.png', width: 512, height: 512, alt: 'Rabbit Loop Icon Builder' }],
   },
   twitter: {
     card:        'summary',
     title:       'Icon Builder — Rabbit Loop',
     description: 'Free browser-based app icon creator. Export at 1024×1024 for iOS and Android.',
-    images:      ['https://auth.rabbit-loop.com/logo.png'],
+    images:      ['https://icons.rabbit-loop.com/logo.png'],
   },
 }
 

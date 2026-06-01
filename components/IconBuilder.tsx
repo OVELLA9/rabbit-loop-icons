@@ -487,6 +487,9 @@ export default function IconBuilder({ isPremium = false }: { isPremium?: boolean
   const [snapLines,    setSnapLines]    = useState<{ axis: 'x'|'y'; pos: number }[]>([])
   const [zoomDevice,   setZoomDevice]   = useState<'iphone'|'android'|null>(null)
 
+  const imageCacheRef = useRef<Map<string, HTMLImageElement>>(new Map())
+  const [zoomIconUrl, setZoomIconUrl] = useState<string | null>(null)
+
   const [dragging, setDragging] = useState<{
     id: string; startX: number; startY: number; origX: number; origY: number
   } | null>(null)
@@ -658,18 +661,35 @@ export default function IconBuilder({ isPremium = false }: { isPremium?: boolean
     try { localStorage.setItem('rl-icon-builder', JSON.stringify({ elements, bgColor })) } catch {}
   }, [elements, bgColor])
 
-  // Update device preview canvases
+  // Update device preview canvases (preload images first so they appear)
   useEffect(() => {
-    const targets = [{ ref: iphoneRef, size: 60 }, { ref: androidRef, size: 57 }]
-    for (const { ref, size } of targets) {
-      const src = ref.current
-      if (!src) continue
-      const dst = src.getContext('2d')!
-      const rendered = renderIcon(elements, bgColor, size)
-      dst.clearRect(0, 0, size, size)
-      dst.drawImage(rendered, 0, 0)
-    }
+    let cancelled = false
+    preloadImages(elements).then(cache => {
+      if (cancelled) return
+      imageCacheRef.current = cache
+      const targets = [{ ref: iphoneRef, size: 60 }, { ref: androidRef, size: 57 }]
+      for (const { ref, size } of targets) {
+        const src = ref.current
+        if (!src) continue
+        const dst = src.getContext('2d')!
+        const rendered = renderIcon(elements, bgColor, size, false, false, cache)
+        dst.clearRect(0, 0, size, size)
+        dst.drawImage(rendered, 0, 0)
+      }
+    })
+    return () => { cancelled = true }
   }, [elements, bgColor])
+
+  // Pre-render zoom icon when modal opens
+  useEffect(() => {
+    if (!zoomDevice || elements.length === 0) { setZoomIconUrl(null); return }
+    let cancelled = false
+    preloadImages(elements).then(cache => {
+      if (cancelled) return
+      setZoomIconUrl(renderIcon(elements, bgColor, 112, false, false, cache).toDataURL())
+    })
+    return () => { cancelled = true }
+  }, [zoomDevice, elements, bgColor])
 
   function download(canvas: HTMLCanvasElement, filename: string) {
     const a = document.createElement('a')
@@ -1028,8 +1048,8 @@ export default function IconBuilder({ isPremium = false }: { isPremium?: boolean
                         <div key={i} style={{ width: 56, height: 56, borderRadius: 13, overflow: 'hidden', flexShrink: 0 }}>
                           {isYours
                             ? <div style={{ width: 56, height: 56, borderRadius: 13, overflow: 'hidden', background: bgColor, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                {elements.length > 0
-                                  ? <img src={renderIcon(elements, bgColor, 112).toDataURL()} style={{ width: 56, height: 56, borderRadius: 13 }} />
+                                {zoomIconUrl
+                                  ? <img src={zoomIconUrl} style={{ width: 56, height: 56, borderRadius: 13 }} />
                                   : <div style={{ width: 56, height: 56, background: bgColor, borderRadius: 13 }} />
                                 }
                               </div>
@@ -1062,8 +1082,8 @@ export default function IconBuilder({ isPremium = false }: { isPremium?: boolean
                         <div key={i} style={{ width: 56, height: 56, borderRadius: 28, overflow: 'hidden', flexShrink: 0 }}>
                           {isYours
                             ? <div style={{ width: 56, height: 56, borderRadius: 28, overflow: 'hidden', background: bgColor }}>
-                                {elements.length > 0
-                                  ? <img src={renderIcon(elements, bgColor, 112).toDataURL()} style={{ width: 56, height: 56, borderRadius: 28 }} />
+                                {zoomIconUrl
+                                  ? <img src={zoomIconUrl} style={{ width: 56, height: 56, borderRadius: 28 }} />
                                   : <div style={{ width: 56, height: 56, background: bgColor }} />
                                 }
                               </div>

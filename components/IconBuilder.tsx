@@ -867,7 +867,7 @@ export default function IconBuilder({ isPremium = false }: { isPremium?: boolean
           <div
             ref={canvasRef}
             className="relative select-none rounded-2xl border border-gray-800"
-            style={{ width: DISPLAY_SIZE, height: DISPLAY_SIZE, backgroundColor: bgColor, overflow: 'hidden' }}
+            style={{ width: DISPLAY_SIZE, height: DISPLAY_SIZE, backgroundColor: bgColor, overflow: 'hidden', transform: 'translateZ(0)' }}
             onClick={() => setSelectedId(null)}
           >
             {/* Snap guide lines */}

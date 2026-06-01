@@ -393,8 +393,20 @@ export default function IconBuilder({ isPremium = false }: { isPremium?: boolean
   const iphoneRef   = useRef<HTMLCanvasElement>(null)
   const androidRef  = useRef<HTMLCanvasElement>(null)
 
-  const [elements,     setElements]     = useState<CanvasElement[]>([])
-  const [bgColor,      setBgColor]      = useState('#0a0a0a')
+  const [elements,     setElements]     = useState<CanvasElement[]>(() => {
+    try {
+      const s = localStorage.getItem('rl-icon-builder')
+      if (s) return JSON.parse(s).elements ?? []
+    } catch {}
+    return []
+  })
+  const [bgColor,      setBgColor]      = useState(() => {
+    try {
+      const s = localStorage.getItem('rl-icon-builder')
+      if (s) return JSON.parse(s).bgColor ?? '#0a0a0a'
+    } catch {}
+    return '#0a0a0a'
+  })
   const [selectedId,   setSelectedId]   = useState<string | null>(null)
   const [showEmojis,   setShowEmojis]   = useState(false)
   const [showText,     setShowText]     = useState(false)
@@ -567,6 +579,11 @@ export default function IconBuilder({ isPremium = false }: { isPremium?: boolean
       window.removeEventListener('mouseup', onMouseUp)
     }
   }, [dragging, resizing, rotating, elements])
+
+  // Persist design to localStorage so a refresh doesn't lose work
+  useEffect(() => {
+    try { localStorage.setItem('rl-icon-builder', JSON.stringify({ elements, bgColor })) } catch {}
+  }, [elements, bgColor])
 
   // Update device preview canvases
   useEffect(() => {

@@ -3,14 +3,34 @@
 import React, { useEffect, useRef, useState } from 'react'
 
 interface CanvasElement {
-  id:       string
-  type:     'emoji' | 'text'
-  content:  string
-  x:        number
-  y:        number
-  fontSize: number
-  rotation: number
-  color:    string
+  id:         string
+  type:       'emoji' | 'text'
+  content:    string
+  x:          number
+  y:          number
+  fontSize:   number
+  rotation:   number
+  color:      string
+  fontFamily?: string
+}
+
+const FONTS: { label: string; value: string; weight: string }[] = [
+  { label: 'System',           value: '-apple-system, Arial, sans-serif', weight: 'bold'  },
+  { label: 'Inter',            value: "'Inter', sans-serif",               weight: 'bold'  },
+  { label: 'Poppins',          value: "'Poppins', sans-serif",             weight: 'bold'  },
+  { label: 'Montserrat',       value: "'Montserrat', sans-serif",          weight: 'bold'  },
+  { label: 'Bebas Neue',       value: "'Bebas Neue', cursive",             weight: '400'   },
+  { label: 'Oswald',           value: "'Oswald', sans-serif",              weight: 'bold'  },
+  { label: 'Playfair',         value: "'Playfair Display', serif",         weight: 'bold'  },
+  { label: 'Space Grotesk',    value: "'Space Grotesk', sans-serif",       weight: 'bold'  },
+  { label: 'Nunito',           value: "'Nunito', sans-serif",              weight: 'bold'  },
+  { label: 'Syne',             value: "'Syne', sans-serif",                weight: '800'   },
+  { label: 'DM Serif',         value: "'DM Serif Display', serif",         weight: '400'   },
+]
+
+function fontString(el: CanvasElement, sizeWithScale: number): string {
+  const f = FONTS.find(f => f.value === el.fontFamily) ?? FONTS[0]
+  return `${f.weight} ${sizeWithScale}px ${f.value}`
 }
 
 const CANVAS_SIZE  = 1024
@@ -208,7 +228,7 @@ function renderIcon(elements: CanvasElement[], bgColor: string, size: number, ti
     ctx.save()
     ctx.translate(el.x * scale, el.y * scale)
     ctx.rotate((el.rotation * Math.PI) / 180)
-    ctx.font         = `bold ${el.fontSize * scale}px -apple-system, Arial, sans-serif`
+    ctx.font         = fontString(el, el.fontSize * scale)
     ctx.textAlign    = 'center'
     ctx.textBaseline = 'middle'
     ctx.fillStyle    = tinted ? '#ffffff' : el.color
@@ -257,6 +277,7 @@ export default function IconBuilder({ isPremium = false }: { isPremium?: boolean
   const [symbolGroup,  setSymbolGroup]  = useState(0)
   const [textInput,    setTextInput]    = useState('')
   const [textColor,    setTextColor]    = useState('#ffffff')
+  const [selectedFont, setSelectedFont] = useState(FONTS[0].value)
   const [snapLines,    setSnapLines]    = useState<{ axis: 'x'|'y'; pos: number }[]>([])
   const [zoomDevice,   setZoomDevice]   = useState<'iphone'|'android'|null>(null)
 
@@ -290,7 +311,7 @@ export default function IconBuilder({ isPremium = false }: { isPremium?: boolean
     if (!textInput.trim()) return
     const el: CanvasElement = {
       id: crypto.randomUUID(), type: 'text', content: textInput.trim(),
-      x: CANVAS_SIZE / 2, y: CANVAS_SIZE / 2, fontSize: 120, rotation: 0, color: textColor,
+      x: CANVAS_SIZE / 2, y: CANVAS_SIZE / 2, fontSize: 120, rotation: 0, color: textColor, fontFamily: selectedFont,
     }
     setElements(prev => [...prev, el])
     setSelectedId(el.id)
@@ -422,9 +443,9 @@ export default function IconBuilder({ isPremium = false }: { isPremium?: boolean
   }
 
   const wm = !isPremium
-  function exportPng()    { download(renderIcon(elements, bgColor,   CANVAS_SIZE, false, wm), 'icon.png')        }
-  function exportDark()   { download(renderIcon(elements, '#000000', CANVAS_SIZE, false, wm), 'icon-dark.png')   }
-  function exportTinted() { download(renderIcon(elements, '#000000', CANVAS_SIZE, true,  wm), 'icon-tinted.png') }
+  async function exportPng()    { await document.fonts.ready; download(renderIcon(elements, bgColor,   CANVAS_SIZE, false, wm), 'icon.png')        }
+  async function exportDark()   { await document.fonts.ready; download(renderIcon(elements, '#000000', CANVAS_SIZE, false, wm), 'icon-dark.png')   }
+  async function exportTinted() { await document.fonts.ready; download(renderIcon(elements, '#000000', CANVAS_SIZE, true,  wm), 'icon-tinted.png') }
 
   // Phone grid helper
   function phoneGrid(icons: typeof IPHONE_ICONS, yourIconIdx: number, iconSize: number, radius: number, gap: number, cols: number) {
@@ -479,6 +500,15 @@ export default function IconBuilder({ isPremium = false }: { isPremium?: boolean
               <input type="color" value={selected.color} onChange={e => update(selected.id, { color: e.target.value })}
                 className="w-7 h-7 rounded cursor-pointer bg-transparent border-0" />
             </div>
+            {selected.type === 'text' && (
+              <select value={selected.fontFamily ?? FONTS[0].value}
+                onChange={e => update(selected.id, { fontFamily: e.target.value })}
+                className="bg-gray-800 text-white text-xs px-2 py-1.5 rounded-lg border border-gray-700 focus:outline-none focus:border-gray-500">
+                {FONTS.map(f => (
+                  <option key={f.value} value={f.value}>{f.label}</option>
+                ))}
+              </select>
+            )}
             <button onClick={deleteSelected} className="px-2.5 py-1.5 bg-red-950 hover:bg-red-900 text-red-400 text-sm rounded-lg">Delete</button>
           </>
         )}
@@ -528,17 +558,28 @@ export default function IconBuilder({ isPremium = false }: { isPremium?: boolean
 
       {/* Text input */}
       {showText && (
-        <div className="flex items-center gap-3 bg-gray-950 border border-gray-800 rounded-xl p-4">
-          <input value={textInput} onChange={e => setTextInput(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && addText()} placeholder="Enter text…" autoFocus
-            className="flex-1 bg-gray-800 text-white text-sm px-3 py-2 rounded-lg border border-gray-700 focus:outline-none focus:border-gray-500 placeholder-gray-600" />
-          <div className="flex items-center gap-2 shrink-0">
-            <span className="text-xs text-gray-400">Colour</span>
-            <input type="color" value={textColor} onChange={e => setTextColor(e.target.value)}
-              className="w-8 h-8 rounded cursor-pointer bg-transparent border-0" />
+        <div className="flex flex-col gap-3 bg-gray-950 border border-gray-800 rounded-xl p-4">
+          <div className="flex items-center gap-3">
+            <input value={textInput} onChange={e => setTextInput(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && addText()} placeholder="Enter text…" autoFocus
+              className="flex-1 bg-gray-800 text-white text-sm px-3 py-2 rounded-lg border border-gray-700 focus:outline-none focus:border-gray-500 placeholder-gray-600" />
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="text-xs text-gray-400">Colour</span>
+              <input type="color" value={textColor} onChange={e => setTextColor(e.target.value)}
+                className="w-8 h-8 rounded cursor-pointer bg-transparent border-0" />
+            </div>
+            <button onClick={addText}
+              className="px-3 py-2 bg-white hover:bg-gray-200 text-black text-sm font-medium rounded-lg transition-colors shrink-0">Add</button>
           </div>
-          <button onClick={addText}
-            className="px-3 py-2 bg-white hover:bg-gray-200 text-black text-sm font-medium rounded-lg transition-colors shrink-0">Add</button>
+          <div className="flex flex-wrap gap-2">
+            {FONTS.map(f => (
+              <button key={f.value} onClick={() => setSelectedFont(f.value)}
+                style={{ fontFamily: f.value }}
+                className={`px-3 py-1 text-sm rounded-lg border transition-colors ${selectedFont === f.value ? 'bg-white text-black border-white' : 'bg-gray-800 text-gray-300 border-gray-700 hover:border-gray-500'}`}>
+                {f.label}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 

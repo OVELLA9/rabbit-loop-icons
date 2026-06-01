@@ -388,6 +388,27 @@ function AppIconCell({ bg, e, size, radius }: { bg: string; e: string; size: num
   )
 }
 
+function ImagePreview({ dataUrl, color, size }: { dataUrl: string; color: string; size: number }) {
+  const ref = useRef<HTMLCanvasElement>(null)
+  useEffect(() => {
+    const canvas = ref.current
+    if (!canvas) return
+    const s   = Math.round(size)
+    canvas.width = canvas.height = s
+    const ctx = canvas.getContext('2d')!
+    ctx.clearRect(0, 0, s, s)
+    const img = new Image()
+    img.onload = () => {
+      ctx.fillStyle = color
+      ctx.fillRect(0, 0, s, s)
+      ctx.globalCompositeOperation = 'destination-in'
+      ctx.drawImage(img, 0, 0, s, s)
+    }
+    img.src = dataUrl
+  }, [dataUrl, color, size])
+  return <canvas ref={ref} style={{ display: 'block', pointerEvents: 'none' }} />
+}
+
 export default function IconBuilder({ isPremium = false }: { isPremium?: boolean }) {
   const canvasRef   = useRef<HTMLDivElement>(null)
   const iphoneRef   = useRef<HTMLCanvasElement>(null)
@@ -806,6 +827,7 @@ export default function IconBuilder({ isPremium = false }: { isPremium?: boolean
                   cursor: dragging?.id === el.id ? 'grabbing' : 'grab',
                   lineHeight: 1, userSelect: 'none',
                   color:      el.type === 'image' ? 'transparent' : el.color,
+                  overflow:   'hidden',
                   whiteSpace: 'nowrap',
                   fontFamily: el.type === 'text' ? (el.fontFamily ?? FONTS[0].value) : undefined,
                   fontWeight: el.type === 'text' ? (FONTS.find(f => f.value === el.fontFamily)?.weight ?? 'bold') : undefined,
@@ -815,19 +837,7 @@ export default function IconBuilder({ isPremium = false }: { isPremium?: boolean
                   onClick={e => e.stopPropagation()}
                 >
                   {el.type === 'image' && el.dataUrl ? (
-                    <div style={{
-                      width: '100%', height: '100%',
-                      backgroundColor: el.color,
-                      WebkitMaskImage:    `url(${el.dataUrl})`,
-                      WebkitMaskSize:     'contain',
-                      WebkitMaskRepeat:   'no-repeat',
-                      WebkitMaskPosition: 'center',
-                      maskImage:    `url(${el.dataUrl})`,
-                      maskSize:     'contain',
-                      maskRepeat:   'no-repeat',
-                      maskPosition: 'center',
-                      pointerEvents: 'none',
-                    }} />
+                    <ImagePreview dataUrl={el.dataUrl} color={el.color} size={el.fontSize * SCALE} />
                   ) : el.content}
                   {isSel && (
                     <>

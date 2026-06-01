@@ -782,7 +782,9 @@ export default function IconBuilder({ isPremium = false }: { isPremium?: boolean
               return (
                 <div key={el.id} style={{
                   position: 'absolute', left: el.x * SCALE, top: el.y * SCALE,
-                  fontSize: el.fontSize * SCALE,
+                  fontSize: el.type === 'image' ? undefined : el.fontSize * SCALE,
+                  width:    el.type === 'image' ? el.fontSize * SCALE : undefined,
+                  height:   el.type === 'image' ? el.fontSize * SCALE : undefined,
                   transform: `translate(-50%, -50%) rotate(${el.rotation}deg)`,
                   cursor: dragging?.id === el.id ? 'grabbing' : 'grab',
                   lineHeight: 1, userSelect: 'none',
@@ -790,25 +792,26 @@ export default function IconBuilder({ isPremium = false }: { isPremium?: boolean
                   whiteSpace: 'nowrap',
                   fontFamily: el.type === 'text' ? (el.fontFamily ?? FONTS[0].value) : undefined,
                   fontWeight: el.type === 'text' ? (FONTS.find(f => f.value === el.fontFamily)?.weight ?? 'bold') : undefined,
-                  ...(el.type === 'image' && el.dataUrl ? {
-                    width:  el.fontSize * SCALE,
-                    height: el.fontSize * SCALE,
-                    backgroundColor: el.color,
-                    WebkitMaskImage:    `url(${el.dataUrl})`,
-                    WebkitMaskSize:     'contain',
-                    WebkitMaskRepeat:   'no-repeat',
-                    WebkitMaskPosition: 'center',
-                    maskImage:    `url(${el.dataUrl})`,
-                    maskSize:     'contain',
-                    maskRepeat:   'no-repeat',
-                    maskPosition: 'center',
-                  } : {}),
                   zIndex: isSel ? 10 : undefined,
                 }}
                   onMouseDown={e => onElementMouseDown(e, el.id)}
                   onClick={e => e.stopPropagation()}
                 >
-                  {el.content}
+                  {el.type === 'image' && el.dataUrl ? (
+                    <div style={{
+                      width: '100%', height: '100%',
+                      backgroundColor: el.color,
+                      WebkitMaskImage:    `url(${el.dataUrl})`,
+                      WebkitMaskSize:     'contain',
+                      WebkitMaskRepeat:   'no-repeat',
+                      WebkitMaskPosition: 'center',
+                      maskImage:    `url(${el.dataUrl})`,
+                      maskSize:     'contain',
+                      maskRepeat:   'no-repeat',
+                      maskPosition: 'center',
+                      pointerEvents: 'none',
+                    }} />
+                  ) : el.content}
                   {isSel && (
                     <>
                       <div style={{ position: 'absolute', inset: -8, border: '1.5px solid rgba(255,255,255,0.35)', borderRadius: 6, pointerEvents: 'none' }} />

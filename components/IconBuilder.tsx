@@ -871,7 +871,7 @@ export default function IconBuilder({ isPremium = false }: { isPremium?: boolean
                   cursor: dragging?.id === el.id ? 'grabbing' : 'grab',
                   lineHeight: 1, userSelect: 'none',
                   color:      isImg ? 'transparent' : el.color,
-                  overflow:   'hidden',
+                  overflow:   isImg ? 'visible' : 'hidden',
                   whiteSpace: 'nowrap',
                   fontFamily: el.type === 'text' ? (el.fontFamily ?? FONTS[0].value) : undefined,
                   fontWeight: el.type === 'text' ? (FONTS.find(f => f.value === el.fontFamily)?.weight ?? 'bold') : undefined,
@@ -915,11 +915,6 @@ export default function IconBuilder({ isPremium = false }: { isPremium?: boolean
                 zIndex: 50,
                 pointerEvents: 'none',
               }}>
-                <div style={{
-                  position: 'absolute', inset: -8,
-                  border: '1.5px dashed rgba(255,255,255,0.5)',
-                  borderRadius: 6, pointerEvents: 'none',
-                }} />
                 <div title="Drag to rotate" style={{
                   position: 'absolute', top: -22, left: '50%', transform: 'translateX(-50%)',
                   width: 14, height: 14, background: '#3b82f6', border: '2px solid #fff',

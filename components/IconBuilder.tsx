@@ -21,43 +21,78 @@ function processImageToSilhouette(file: File): Promise<string> {
     reader.onload = ev => {
       const img = new Image()
       img.onload = () => {
-        const c   = document.createElement('canvas')
-        c.width   = img.naturalWidth
-        c.height  = img.naturalHeight
-        const ctx = c.getContext('2d')!
-        ctx.drawImage(img, 0, 0)
-        const id  = ctx.getImageData(0, 0, c.width, c.height)
-        const d   = id.data
-        const w   = c.width, h = c.height
+        // Cap processing resolution for speed — silhouette scales fine
+        const MAX = 512
+        const scale = Math.min(1, MAX / Math.max(img.naturalWidth, img.naturalHeight))
+        const w = Math.round(img.naturalWidth  * scale)
+        const h = Math.round(img.naturalHeight * scale)
 
-        // Check for meaningful alpha channel
+        const c   = document.createElement('canvas')
+        c.width   = w
+        c.height  = h
+        const ctx = c.getContext('2d')!
+        ctx.drawImage(img, 0, 0, w, h)
+        const id = ctx.getImageData(0, 0, w, h)
+        const d  = id.data
+
+        // If the image already has transparency, use it directly
         let hasAlpha = false
         for (let i = 3; i < d.length; i += 4) {
           if (d[i] < 250) { hasAlpha = true; break }
         }
 
         if (hasAlpha) {
-          // Use alpha: opaque pixels → black silhouette
           for (let i = 0; i < d.length; i += 4) {
-            if (d[i + 3] < 128) { d[i + 3] = 0 }
+            if (d[i+3] < 128) { d[i+3] = 0 }
             else { d[i] = 0; d[i+1] = 0; d[i+2] = 0; d[i+3] = 255 }
           }
         } else {
-          // Sample corners to detect background colour
-          const brightness = (i: number) => d[i]*0.299 + d[i+1]*0.587 + d[i+2]*0.114
-          const corners = [
-            brightness(0),
-            brightness((w - 1) * 4),
-            brightness((h - 1) * w * 4),
-            brightness(((h - 1) * w + w - 1) * 4),
-          ]
-          const bgBright   = corners.reduce((a, b) => a + b, 0) / 4
-          const darkBg     = bgBright < 128
-          for (let i = 0; i < d.length; i += 4) {
-            const br        = brightness(i)
-            const isSubject = darkBg ? br > 128 : br < 128
-            if (isSubject) { d[i] = 0; d[i+1] = 0; d[i+2] = 0; d[i+3] = 255 }
-            else { d[i+3] = 0 }
+          // ── Flood-fill background removal ──────────────────────────────
+          // Sample background colour from a grid of corner/edge pixels
+          const TOLERANCE = 45
+          let bgR = 0, bgG = 0, bgB = 0, n = 0
+          const sample = (x: number, y: number) => {
+            const p = (y * w + x) * 4
+            bgR += d[p]; bgG += d[p+1]; bgB += d[p+2]; n++
+          }
+          const S = Math.min(4, Math.floor(Math.min(w, h) / 8))
+          for (let i = 0; i < S; i++) {
+            sample(i, i); sample(w-1-i, i); sample(i, h-1-i); sample(w-1-i, h-1-i)
+          }
+          bgR /= n; bgG /= n; bgB /= n
+
+          const similar = (p: number) => {
+            const dr = d[p]-bgR, dg = d[p+1]-bgG, db = d[p+2]-bgB
+            return dr*dr + dg*dg + db*db < TOLERANCE * TOLERANCE
+          }
+
+          // BFS from all edges
+          const visited = new Uint8Array(w * h)
+          const queue   = new Int32Array(w * h)
+          let   head    = 0, tail = 0
+
+          const push = (x: number, y: number) => {
+            if (x < 0 || x >= w || y < 0 || y >= h) return
+            const idx = y * w + x
+            if (visited[idx]) return
+            visited[idx] = 1
+            if (similar(idx * 4)) queue[tail++] = idx
+          }
+
+          for (let x = 0; x < w; x++) { push(x, 0);   push(x, h-1) }
+          for (let y = 0; y < h; y++) { push(0, y);   push(w-1, y) }
+
+          while (head < tail) {
+            const idx = queue[head++]
+            const x   = idx % w, y = Math.floor(idx / w)
+            push(x+1, y); push(x-1, y); push(x, y+1); push(x, y-1)
+          }
+
+          // visited = background → transparent; else → black silhouette
+          for (let i = 0; i < w * h; i++) {
+            const p = i * 4
+            if (visited[i]) { d[p+3] = 0 }
+            else { d[p] = 0; d[p+1] = 0; d[p+2] = 0; d[p+3] = 255 }
           }
         }
 

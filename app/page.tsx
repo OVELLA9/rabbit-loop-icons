@@ -1,5 +1,6 @@
 import { getSession, isPremiumUser, registerConnectedApp } from '@/lib/session'
 import IconBuilder from '@/components/IconBuilder'
+import HeartbeatTracker from '@/components/HeartbeatTracker'
 
 export const dynamic = 'force-dynamic'
 
@@ -13,6 +14,7 @@ export default async function Page() {
 
   return (
     <div className="min-h-screen flex flex-col">
+      <HeartbeatTracker />
 
       {/* Header */}
       <header className="border-b border-white/[0.06] px-4 sm:px-8 py-4 flex items-center justify-between">

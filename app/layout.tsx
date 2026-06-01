@@ -3,6 +3,7 @@ import './globals.css'
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://icons.rabbit-loop.com'),
+  icons: { icon: '/favicon.png', apple: '/favicon.png' },
   title:        'Icon Builder — Rabbit Loop',
   description:  'Free browser-based app icon creator. Drag emojis, symbols and text onto a canvas, then export at 1024×1024 ready for iOS and Android. No account required.',
   keywords:     ['app icon maker', 'icon builder', 'iOS icon', 'Android icon', 'app icon generator', 'free icon tool', 'emoji icon', '1024x1024 icon'],

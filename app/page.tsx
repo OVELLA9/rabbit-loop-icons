@@ -94,7 +94,7 @@ export default async function Page() {
             {[
               {
                 title: 'Drag, resize and rotate',
-                body:  'Place any emoji or symbol on the canvas and freely position it. Resize and rotate with simple handles — snap guides keep everything aligned.',
+                body:  'Place any emoji, symbol or uploaded image on the canvas and freely position it. Resize and rotate with simple handles — snap guides keep everything aligned.',
               },
               {
                 title: 'Exports at 1024×1024',
@@ -115,7 +115,7 @@ export default async function Page() {
           <div className="border-t border-white/[0.04] pt-10">
             <h3 className="text-white text-sm font-semibold mb-4">How it works</h3>
             <ol className="space-y-2 text-gray-600 text-xs leading-relaxed list-decimal list-inside">
-              <li>Pick an emoji or symbol from the picker, or type your own text</li>
+              <li>Pick an emoji or symbol from the picker, type your own text, or upload your own logo</li>
               <li>Drag it into position on the canvas — snap guides help with alignment</li>
               <li>Adjust the size, rotation, and colour using the toolbar</li>
               <li>Preview your icon in an iPhone and Android home screen mock-up</li>
@@ -134,8 +134,9 @@ export default async function Page() {
               >
                 Rabbit Loop Premium
               </a>{' '}
-              removes the watermark and unlocks watermark-free exports for all three variants
-              (standard, dark, and tinted).
+              removes the watermark, unlocks watermark-free exports for all three variants
+              (standard, dark, and tinted), and enables uploading your own logo or image and
+              converting it to a flat, recolourable symbol.
             </p>
           </div>
         </div>

@@ -3,15 +3,86 @@
 import React, { useEffect, useRef, useState } from 'react'
 
 interface CanvasElement {
-  id:         string
-  type:       'emoji' | 'text'
-  content:    string
-  x:          number
-  y:          number
-  fontSize:   number
-  rotation:   number
-  color:      string
+  id:          string
+  type:        'emoji' | 'text' | 'image'
+  content:     string
+  dataUrl?:    string
+  x:           number
+  y:           number
+  fontSize:    number
+  rotation:    number
+  color:       string
   fontFamily?: string
+}
+
+function processImageToSilhouette(file: File): Promise<string> {
+  return new Promise(resolve => {
+    const reader = new FileReader()
+    reader.onload = ev => {
+      const img = new Image()
+      img.onload = () => {
+        const c   = document.createElement('canvas')
+        c.width   = img.naturalWidth
+        c.height  = img.naturalHeight
+        const ctx = c.getContext('2d')!
+        ctx.drawImage(img, 0, 0)
+        const id  = ctx.getImageData(0, 0, c.width, c.height)
+        const d   = id.data
+        const w   = c.width, h = c.height
+
+        // Check for meaningful alpha channel
+        let hasAlpha = false
+        for (let i = 3; i < d.length; i += 4) {
+          if (d[i] < 250) { hasAlpha = true; break }
+        }
+
+        if (hasAlpha) {
+          // Use alpha: opaque pixels → black silhouette
+          for (let i = 0; i < d.length; i += 4) {
+            if (d[i + 3] < 128) { d[i + 3] = 0 }
+            else { d[i] = 0; d[i+1] = 0; d[i+2] = 0; d[i+3] = 255 }
+          }
+        } else {
+          // Sample corners to detect background colour
+          const brightness = (i: number) => d[i]*0.299 + d[i+1]*0.587 + d[i+2]*0.114
+          const corners = [
+            brightness(0),
+            brightness((w - 1) * 4),
+            brightness((h - 1) * w * 4),
+            brightness(((h - 1) * w + w - 1) * 4),
+          ]
+          const bgBright   = corners.reduce((a, b) => a + b, 0) / 4
+          const darkBg     = bgBright < 128
+          for (let i = 0; i < d.length; i += 4) {
+            const br        = brightness(i)
+            const isSubject = darkBg ? br > 128 : br < 128
+            if (isSubject) { d[i] = 0; d[i+1] = 0; d[i+2] = 0; d[i+3] = 255 }
+            else { d[i+3] = 0 }
+          }
+        }
+
+        ctx.putImageData(id, 0, 0)
+        resolve(c.toDataURL())
+      }
+      img.src = ev.target!.result as string
+    }
+    reader.readAsDataURL(file)
+  })
+}
+
+async function preloadImages(elements: CanvasElement[]): Promise<Map<string, HTMLImageElement>> {
+  const map = new Map<string, HTMLImageElement>()
+  await Promise.all(
+    elements
+      .filter(e => e.type === 'image' && e.dataUrl)
+      .map(e => new Promise<void>(resolve => {
+        const img = new Image()
+        img.onload = () => { map.set(e.id, img); resolve() }
+        img.onerror = () => resolve()
+        img.src = e.dataUrl!
+      }))
+  )
+  return map
 }
 
 const FONTS: { label: string; value: string; weight: string }[] = [
@@ -257,7 +328,7 @@ const SYMBOL_GROUPS: { label: string; items: string[] }[] = [
   ]},
 ]
 
-function renderIcon(elements: CanvasElement[], bgColor: string, size: number, tinted = false, watermark = false): HTMLCanvasElement {
+function renderIcon(elements: CanvasElement[], bgColor: string, size: number, tinted = false, watermark = false, imageCache: Map<string, HTMLImageElement> = new Map()): HTMLCanvasElement {
   const canvas = document.createElement('canvas')
   canvas.width = canvas.height = size
   const ctx   = canvas.getContext('2d')!
@@ -268,11 +339,26 @@ function renderIcon(elements: CanvasElement[], bgColor: string, size: number, ti
     ctx.save()
     ctx.translate(el.x * scale, el.y * scale)
     ctx.rotate((el.rotation * Math.PI) / 180)
-    ctx.font         = fontString(el, el.fontSize * scale)
-    ctx.textAlign    = 'center'
-    ctx.textBaseline = 'middle'
-    ctx.fillStyle    = tinted ? '#ffffff' : el.color
-    ctx.fillText(el.content, 0, 0)
+    if (el.type === 'image' && el.dataUrl) {
+      const imgEl = imageCache.get(el.id)
+      if (imgEl) {
+        const sz  = el.fontSize * scale
+        const off = document.createElement('canvas')
+        off.width = off.height = sz
+        const offCtx = off.getContext('2d')!
+        offCtx.fillStyle = tinted ? '#ffffff' : el.color
+        offCtx.fillRect(0, 0, sz, sz)
+        offCtx.globalCompositeOperation = 'destination-in'
+        offCtx.drawImage(imgEl, 0, 0, sz, sz)
+        ctx.drawImage(off, -sz / 2, -sz / 2)
+      }
+    } else {
+      ctx.font         = fontString(el, el.fontSize * scale)
+      ctx.textAlign    = 'center'
+      ctx.textBaseline = 'middle'
+      ctx.fillStyle    = tinted ? '#ffffff' : el.color
+      ctx.fillText(el.content, 0, 0)
+    }
     ctx.restore()
   }
   if (watermark) {
@@ -315,9 +401,11 @@ export default function IconBuilder({ isPremium = false }: { isPremium?: boolean
   const [pickerTab,    setPickerTab]    = useState<'emoji' | 'symbols'>('emoji')
   const [emojiGroup,   setEmojiGroup]   = useState(0)
   const [symbolGroup,  setSymbolGroup]  = useState(0)
-  const [textInput,    setTextInput]    = useState('')
-  const [textColor,    setTextColor]    = useState('#ffffff')
-  const [selectedFont, setSelectedFont] = useState(FONTS[0].value)
+  const [textInput,     setTextInput]    = useState('')
+  const [textColor,     setTextColor]    = useState('#ffffff')
+  const [selectedFont,  setSelectedFont] = useState(FONTS[0].value)
+  const [uploading,     setUploading]    = useState(false)
+  const imageInputRef = useRef<HTMLInputElement>(null)
   const [snapLines,    setSnapLines]    = useState<{ axis: 'x'|'y'; pos: number }[]>([])
   const [zoomDevice,   setZoomDevice]   = useState<'iphone'|'android'|null>(null)
 
@@ -357,6 +445,24 @@ export default function IconBuilder({ isPremium = false }: { isPremium?: boolean
     setSelectedId(el.id)
     setTextInput('')
     setShowText(false)
+  }
+
+  async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploading(true)
+    try {
+      const dataUrl = await processImageToSilhouette(file)
+      const el: CanvasElement = {
+        id: crypto.randomUUID(), type: 'image', content: file.name, dataUrl,
+        x: CANVAS_SIZE / 2, y: CANVAS_SIZE / 2, fontSize: 300, rotation: 0, color: '#ffffff',
+      }
+      setElements(prev => [...prev, el])
+      setSelectedId(el.id)
+    } finally {
+      setUploading(false)
+      e.target.value = ''
+    }
   }
 
   function deleteSelected() {
@@ -483,9 +589,9 @@ export default function IconBuilder({ isPremium = false }: { isPremium?: boolean
   }
 
   const wm = !isPremium
-  async function exportPng()    { await document.fonts.ready; download(renderIcon(elements, bgColor,   CANVAS_SIZE, false, wm), 'icon.png')        }
-  async function exportDark()   { await document.fonts.ready; download(renderIcon(elements, '#000000', CANVAS_SIZE, false, wm), 'icon-dark.png')   }
-  async function exportTinted() { await document.fonts.ready; download(renderIcon(elements, '#000000', CANVAS_SIZE, true,  wm), 'icon-tinted.png') }
+  async function exportPng()    { await document.fonts.ready; const ic = await preloadImages(elements); download(renderIcon(elements, bgColor,   CANVAS_SIZE, false, wm, ic), 'icon.png')        }
+  async function exportDark()   { await document.fonts.ready; const ic = await preloadImages(elements); download(renderIcon(elements, '#000000', CANVAS_SIZE, false, wm, ic), 'icon-dark.png')   }
+  async function exportTinted() { await document.fonts.ready; const ic = await preloadImages(elements); download(renderIcon(elements, '#000000', CANVAS_SIZE, true,  wm, ic), 'icon-tinted.png') }
 
   // Phone grid helper
   function phoneGrid(icons: typeof IPHONE_ICONS, yourIconIdx: number, iconSize: number, radius: number, gap: number, cols: number) {
@@ -530,6 +636,20 @@ export default function IconBuilder({ isPremium = false }: { isPremium?: boolean
           className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${showText ? 'bg-white text-black' : 'bg-gray-800 hover:bg-gray-700 text-white'}`}>
           + Text
         </button>
+        {isPremium ? (
+          <>
+            <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
+            <button onClick={() => imageInputRef.current?.click()} disabled={uploading}
+              className="px-3 py-1.5 text-sm rounded-lg transition-colors bg-gray-800 hover:bg-gray-700 text-white disabled:opacity-50">
+              {uploading ? 'Processing…' : '+ Image'}
+            </button>
+          </>
+        ) : (
+          <a href={`${typeof window !== 'undefined' ? window.location.origin.replace('icons.', '') : 'https://rabbit-loop.com'}/premium`}
+            className="px-3 py-1.5 text-sm rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-500 hover:text-white transition-colors flex items-center gap-1.5">
+            <span className="text-xs">✦</span> Image <span className="text-[10px] text-purple-400 font-medium">Premium</span>
+          </a>
+        )}
         {selected && (
           <>
             <div className="w-px h-5 bg-gray-700" />
@@ -665,10 +785,24 @@ export default function IconBuilder({ isPremium = false }: { isPremium?: boolean
                   fontSize: el.fontSize * SCALE,
                   transform: `translate(-50%, -50%) rotate(${el.rotation}deg)`,
                   cursor: dragging?.id === el.id ? 'grabbing' : 'grab',
-                  lineHeight: 1, userSelect: 'none', color: el.color,
+                  lineHeight: 1, userSelect: 'none',
+                  color:      el.type === 'image' ? 'transparent' : el.color,
                   whiteSpace: 'nowrap',
                   fontFamily: el.type === 'text' ? (el.fontFamily ?? FONTS[0].value) : undefined,
                   fontWeight: el.type === 'text' ? (FONTS.find(f => f.value === el.fontFamily)?.weight ?? 'bold') : undefined,
+                  ...(el.type === 'image' && el.dataUrl ? {
+                    width:  el.fontSize * SCALE,
+                    height: el.fontSize * SCALE,
+                    backgroundColor: el.color,
+                    WebkitMaskImage:    `url(${el.dataUrl})`,
+                    WebkitMaskSize:     'contain',
+                    WebkitMaskRepeat:   'no-repeat',
+                    WebkitMaskPosition: 'center',
+                    maskImage:    `url(${el.dataUrl})`,
+                    maskSize:     'contain',
+                    maskRepeat:   'no-repeat',
+                    maskPosition: 'center',
+                  } : {}),
                   zIndex: isSel ? 10 : undefined,
                 }}
                   onMouseDown={e => onElementMouseDown(e, el.id)}

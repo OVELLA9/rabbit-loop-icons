@@ -453,9 +453,11 @@ function ImagePreview({ dataUrl, color, size }: { dataUrl: string; color: string
 }
 
 export default function IconBuilder({ isPremium = false }: { isPremium?: boolean }) {
-  const canvasRef   = useRef<HTMLDivElement>(null)
-  const iphoneRef   = useRef<HTMLCanvasElement>(null)
-  const androidRef  = useRef<HTMLCanvasElement>(null)
+  const canvasRef    = useRef<HTMLDivElement>(null)
+  const iphoneRef    = useRef<HTMLCanvasElement>(null)
+  const androidRef   = useRef<HTMLCanvasElement>(null)
+  const elementRefs  = useRef<Map<string, HTMLDivElement>>(new Map())
+  const [selectionSize, setSelectionSize] = useState<{ w: number; h: number } | null>(null)
 
   const [elements,     setElements]     = useState<CanvasElement[]>(() => {
     try {
@@ -643,6 +645,13 @@ export default function IconBuilder({ isPremium = false }: { isPremium?: boolean
       window.removeEventListener('mouseup', onMouseUp)
     }
   }, [dragging, resizing, rotating, elements])
+
+  // Measure the selected element's actual rendered size for the selection overlay
+  useEffect(() => {
+    if (!selectedId) { setSelectionSize(null); return }
+    const node = elementRefs.current.get(selectedId)
+    if (node) setSelectionSize({ w: node.offsetWidth, h: node.offsetHeight })
+  }, [selectedId, elements])
 
   // Persist design to localStorage so a refresh doesn't lose work
   useEffect(() => {
@@ -862,56 +871,40 @@ export default function IconBuilder({ isPremium = false }: { isPremium?: boolean
               const isSel = selectedId === el.id
               const isImg = el.type === 'image'
               return (
-                <div key={el.id} style={{
-                  position: 'absolute', left: 0, top: 0,
-                  fontSize: isImg ? undefined : el.fontSize * SCALE,
-                  width:    isImg ? el.fontSize * SCALE : undefined,
-                  height:   isImg ? el.fontSize * SCALE : undefined,
-                  transform: `translate(calc(${el.x * SCALE}px - 50%), calc(${el.y * SCALE}px - 50%)) rotate(${el.rotation}deg)`,
-                  cursor: dragging?.id === el.id ? 'grabbing' : 'grab',
-                  lineHeight: 1, userSelect: 'none',
-                  color:      isImg ? 'transparent' : el.color,
-                  overflow:   'visible',
-                  whiteSpace: 'nowrap',
-                  fontFamily: el.type === 'text' ? (el.fontFamily ?? FONTS[0].value) : undefined,
-                  fontWeight: el.type === 'text' ? (FONTS.find(f => f.value === el.fontFamily)?.weight ?? 'bold') : undefined,
-                  zIndex: isSel ? 10 : undefined,
-                }}
+                <div key={el.id}
+                  ref={node => { if (node) elementRefs.current.set(el.id, node); else elementRefs.current.delete(el.id) }}
+                  style={{
+                    position: 'absolute', left: 0, top: 0,
+                    fontSize: isImg ? undefined : el.fontSize * SCALE,
+                    width:    isImg ? el.fontSize * SCALE : undefined,
+                    height:   isImg ? el.fontSize * SCALE : undefined,
+                    transform: `translate(calc(${el.x * SCALE}px - 50%), calc(${el.y * SCALE}px - 50%)) rotate(${el.rotation}deg)`,
+                    cursor: dragging?.id === el.id ? 'grabbing' : 'grab',
+                    lineHeight: 1, userSelect: 'none',
+                    color:      isImg ? 'transparent' : el.color,
+                    overflow:   'visible',
+                    whiteSpace: 'nowrap',
+                    fontFamily: el.type === 'text' ? (el.fontFamily ?? FONTS[0].value) : undefined,
+                    fontWeight: el.type === 'text' ? (FONTS.find(f => f.value === el.fontFamily)?.weight ?? 'bold') : undefined,
+                    zIndex: isSel ? 10 : undefined,
+                  }}
                   onMouseDown={e => onElementMouseDown(e, el.id)}
                   onClick={e => e.stopPropagation()}
                 >
                   {isImg && el.dataUrl ? (
                     <ImagePreview dataUrl={el.dataUrl} color={el.color} size={el.fontSize * SCALE} />
                   ) : el.content}
-                  {isSel && !isImg && (
-                    <>
-                      <div title="Drag to rotate" style={{
-                        position: 'absolute', top: -22, left: '50%', transform: 'translateX(-50%)',
-                        width: 14, height: 14, background: '#3b82f6', border: '2px solid #fff',
-                        borderRadius: '50%', cursor: 'crosshair', zIndex: 20,
-                      }} onMouseDown={e => { e.stopPropagation(); onRotateMouseDown(e, el.id) }} />
-                      <div title="Drag to resize" style={{
-                        position: 'absolute', bottom: -10, right: -10,
-                        width: 14, height: 14, background: '#fff', border: '2px solid #3b82f6',
-                        borderRadius: 3, cursor: 'se-resize', zIndex: 20,
-                      }} onMouseDown={e => { e.stopPropagation(); onResizeMouseDown(e, el.id) }} />
-                    </>
-                  )}
                 </div>
               )
             })}
 
-            {/* Image element selection overlay — separate layer so it's always above the canvas */}
-            {selected?.type === 'image' && (
+            {/* Unified selection overlay — measured to fit actual element bounds */}
+            {selected && selectionSize && (
               <div style={{
-                position: 'absolute',
-                left: 0,
-                top: 0,
-                width: selected.fontSize * SCALE,
-                height: selected.fontSize * SCALE,
-                transform: `translate(calc(${selected.x * SCALE}px - 50%), calc(${selected.y * SCALE}px - 50%)) rotate(${selected.rotation}deg)`,
-                zIndex: 50,
-                pointerEvents: 'none',
+                position: 'absolute', left: 0, top: 0,
+                width: selectionSize.w, height: selectionSize.h,
+                transform: `translate(calc(${selected.x * SCALE}px - ${selectionSize.w / 2}px), calc(${selected.y * SCALE}px - ${selectionSize.h / 2}px)) rotate(${selected.rotation}deg)`,
+                zIndex: 50, pointerEvents: 'none',
               }}>
                 <div title="Drag to rotate" style={{
                   position: 'absolute', top: -22, left: '50%', transform: 'translateX(-50%)',

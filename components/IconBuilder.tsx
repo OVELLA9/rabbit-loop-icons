@@ -863,11 +863,11 @@ export default function IconBuilder({ isPremium = false }: { isPremium?: boolean
               const isImg = el.type === 'image'
               return (
                 <div key={el.id} style={{
-                  position: 'absolute', left: el.x * SCALE, top: el.y * SCALE,
+                  position: 'absolute', left: 0, top: 0,
                   fontSize: isImg ? undefined : el.fontSize * SCALE,
                   width:    isImg ? el.fontSize * SCALE : undefined,
                   height:   isImg ? el.fontSize * SCALE : undefined,
-                  transform: `translate(-50%, -50%) rotate(${el.rotation}deg)`,
+                  transform: `translate(calc(${el.x * SCALE}px - 50%), calc(${el.y * SCALE}px - 50%)) rotate(${el.rotation}deg)`,
                   cursor: dragging?.id === el.id ? 'grabbing' : 'grab',
                   lineHeight: 1, userSelect: 'none',
                   color:      isImg ? 'transparent' : el.color,
@@ -907,11 +907,11 @@ export default function IconBuilder({ isPremium = false }: { isPremium?: boolean
             {selected?.type === 'image' && (
               <div style={{
                 position: 'absolute',
-                left: selected.x * SCALE,
-                top: selected.y * SCALE,
+                left: 0,
+                top: 0,
                 width: selected.fontSize * SCALE,
                 height: selected.fontSize * SCALE,
-                transform: `translate(-50%, -50%) rotate(${selected.rotation}deg)`,
+                transform: `translate(calc(${selected.x * SCALE}px - 50%), calc(${selected.y * SCALE}px - 50%)) rotate(${selected.rotation}deg)`,
                 zIndex: 50,
                 pointerEvents: 'none',
               }}>

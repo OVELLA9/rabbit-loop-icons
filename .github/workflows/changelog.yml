@@ -1,0 +1,30 @@
+name: Publish to Changelog
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  changelog:
+    name: Record commit in changelog
+    runs-on: ubuntu-latest
+    steps:
+      - name: Post commit to changelog
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+          COMMIT_SHA: ${{ github.sha }}
+          COMMIT_URL: ${{ github.event.head_commit.url }}
+        run: |
+          curl -sf -X POST "$SUPABASE_URL/rest/v1/changelog_entries" \
+            -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+            -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+            -H "Content-Type: application/json" \
+            -H "Prefer: return=minimal" \
+            --data-raw "$(jq -n \
+              --arg app "icon-builder" \
+              --arg message "$COMMIT_MESSAGE" \
+              --arg sha "$COMMIT_SHA" \
+              --arg url "$COMMIT_URL" \
+              '{app: $app, message: $message, commit_sha: $sha, commit_url: $url}')"

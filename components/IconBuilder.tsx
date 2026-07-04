@@ -1,12 +1,13 @@
 'use client'
 
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useRef, useState, useMemo } from 'react'
 
 interface CanvasElement {
   id:          string
   type:        'emoji' | 'text' | 'image'
   content:     string
   dataUrl?:    string
+  isRaw?:      boolean   // raw image upload — display original colours, no silhouette
   x:           number
   y:           number
   fontSize:    number
@@ -21,7 +22,6 @@ function processImageToSilhouette(file: File): Promise<string> {
     reader.onload = ev => {
       const img = new Image()
       img.onload = () => {
-        // Cap processing resolution for speed — silhouette scales fine
         const MAX = 512
         const scale = Math.min(1, MAX / Math.max(img.naturalWidth, img.naturalHeight))
         const w = Math.round(img.naturalWidth  * scale)
@@ -35,7 +35,6 @@ function processImageToSilhouette(file: File): Promise<string> {
         const id = ctx.getImageData(0, 0, w, h)
         const d  = id.data
 
-        // If the image already has transparency, use it directly
         let hasAlpha = false
         for (let i = 3; i < d.length; i += 4) {
           if (d[i] < 250) { hasAlpha = true; break }
@@ -47,8 +46,6 @@ function processImageToSilhouette(file: File): Promise<string> {
             else { d[i] = 0; d[i+1] = 0; d[i+2] = 0; d[i+3] = 255 }
           }
         } else {
-          // ── Flood-fill background removal ──────────────────────────────
-          // Sample background colour from a grid of corner/edge pixels
           const TOLERANCE = 45
           let bgR = 0, bgG = 0, bgB = 0, n = 0
           const sample = (x: number, y: number) => {
@@ -66,7 +63,6 @@ function processImageToSilhouette(file: File): Promise<string> {
             return dr*dr + dg*dg + db*db < TOLERANCE * TOLERANCE
           }
 
-          // BFS from all edges
           const visited = new Uint8Array(w * h)
           const queue   = new Int32Array(w * h)
           let   head    = 0, tail = 0
@@ -88,7 +84,6 @@ function processImageToSilhouette(file: File): Promise<string> {
             push(x+1, y); push(x-1, y); push(x, y+1); push(x, y-1)
           }
 
-          // visited = background → transparent; else → black silhouette
           for (let i = 0; i < w * h; i++) {
             const p = i * 4
             if (visited[i]) { d[p+3] = 0 }
@@ -98,7 +93,6 @@ function processImageToSilhouette(file: File): Promise<string> {
 
         ctx.putImageData(id, 0, 0)
 
-        // Pad into a square with 8% margin so the silhouette doesn't touch the container edges
         const pad     = Math.round(Math.max(w, h) * 0.08)
         const sqSize  = Math.max(w, h) + pad * 2
         const sq      = document.createElement('canvas')
@@ -109,6 +103,14 @@ function processImageToSilhouette(file: File): Promise<string> {
       }
       img.src = ev.target!.result as string
     }
+    reader.readAsDataURL(file)
+  })
+}
+
+function readDataUrl(file: File): Promise<string> {
+  return new Promise(resolve => {
+    const reader = new FileReader()
+    reader.onload = ev => resolve(ev.target!.result as string)
     reader.readAsDataURL(file)
   })
 }
@@ -150,9 +152,8 @@ function fontString(el: CanvasElement, sizeWithScale: number): string {
 const CANVAS_SIZE  = 1024
 const DISPLAY_SIZE = 512
 const SCALE        = DISPLAY_SIZE / CANVAS_SIZE
-const SNAP_DIST    = 14  // canvas units (~7px on screen)
+const SNAP_DIST    = 14
 
-// Fake app icons for device previews
 const IPHONE_ICONS = [
   { bg: '#007AFF', e: '📞' }, { bg: '#34C759', e: '💬' }, { bg: '#FF9500', e: '🗓' }, { bg: '#FF3B30', e: '🎵' },
   { bg: '#FF2D55', e: '📸' }, { bg: '#5856D6', e: '🔔' }, { bg: '#32ADE6', e: '🌤' }, { bg: '#AF52DE', e: '🗺' },
@@ -335,19 +336,9 @@ const SYMBOL_GROUPS: { label: string; items: string[] }[] = [
     '₭','₮','₱','₲','₳','₴','₵','₷','₸','₹',
     '₺','₼','₾','¤','₠','₡','₢','₣','₤','₦',
   ]},
-  { label: 'Animals', items: [
-    '♈','♉','♋','♌','♏','♓','♐','♑','⛎','♘',
-    '♞','♟','⚖','⚔','⚜','☽','☾','☀','⛄','❄',
-    '✦','✧','⁂','❋','✽','✼','❀','✿','❁','⚘',
-  ]},
   { label: 'Chess & Cards', items: [
     '♔','♕','♖','♗','♘','♙','♚','♛','♜','♝',
     '♞','♟','♠','♣','♥','♦','♤','♧','♡','♢',
-  ]},
-  { label: 'Planets & Sky', items: [
-    '☉','☽','☾','☿','♀','♁','♂','♃','♄','♅',
-    '♆','♇','☄','⊕','⊙','♒','♓','☀','☁','☂',
-    '☃','⛄','☈','⛈','⛅','🌤','⛆','☔','⛱','❄',
   ]},
   { label: 'Lines & Blocks', items: [
     '─','│','┌','┐','└','┘','├','┤','┬','┴',
@@ -355,19 +346,10 @@ const SYMBOL_GROUPS: { label: string; items: string[] }[] = [
     '╩','╬','╭','╮','╯','╰','╱','╲','╳','░',
     '▒','▓','█','▀','▄','▌','▐','▏','▎','▍',
   ]},
-  { label: 'Hands & Signs', items: [
-    '☞','☜','☝','☟','☛','☚','✌','✍','✏','✒',
-    '✑','✐','✎','✄','✃','✂','☡','☠','☢','☣',
-  ]},
   { label: 'Fractions', items: [
     '½','⅓','⅔','¼','¾','⅛','⅜','⅝','⅞','⅕',
     '⅖','⅗','⅘','⅙','⅚','⅐','⅑','⅒','‰','‱',
     '№','℃','℉','℗','℠','™','©','®','℀','℁',
-  ]},
-  { label: 'Runic', items: [
-    'ᚠ','ᚡ','ᚢ','ᚣ','ᚤ','ᚥ','ᚦ','ᚧ','ᚨ','ᚩ',
-    'ᚪ','ᚫ','ᚬ','ᚭ','ᚮ','ᚯ','ᚰ','ᚱ','ᚲ','ᚳ',
-    'ᚴ','ᚵ','ᚶ','ᚷ','ᚸ','ᚹ','ᚺ','ᚻ','ᚼ','ᚽ',
   ]},
 ]
 
@@ -385,15 +367,19 @@ function renderIcon(elements: CanvasElement[], bgColor: string, size: number, ti
     if (el.type === 'image' && el.dataUrl) {
       const imgEl = imageCache.get(el.id)
       if (imgEl) {
-        const sz  = el.fontSize * scale
-        const off = document.createElement('canvas')
-        off.width = off.height = sz
-        const offCtx = off.getContext('2d')!
-        offCtx.fillStyle = tinted ? '#ffffff' : el.color
-        offCtx.fillRect(0, 0, sz, sz)
-        offCtx.globalCompositeOperation = 'destination-in'
-        offCtx.drawImage(imgEl, 0, 0, sz, sz)
-        ctx.drawImage(off, -sz / 2, -sz / 2)
+        const sz = el.fontSize * scale
+        if (el.isRaw) {
+          ctx.drawImage(imgEl, -sz / 2, -sz / 2, sz, sz)
+        } else {
+          const off = document.createElement('canvas')
+          off.width = off.height = sz
+          const offCtx = off.getContext('2d')!
+          offCtx.fillStyle = tinted ? '#ffffff' : el.color
+          offCtx.fillRect(0, 0, sz, sz)
+          offCtx.globalCompositeOperation = 'destination-in'
+          offCtx.drawImage(imgEl, 0, 0, sz, sz)
+          ctx.drawImage(off, -sz / 2, -sz / 2)
+        }
       }
     } else {
       ctx.font         = fontString(el, el.fontSize * scale)
@@ -431,7 +417,7 @@ function AppIconCell({ bg, e, size, radius }: { bg: string; e: string; size: num
   )
 }
 
-function ImagePreview({ dataUrl, color, size }: { dataUrl: string; color: string; size: number }) {
+function ImagePreview({ dataUrl, color, size, isRaw = false }: { dataUrl: string; color: string; size: number; isRaw?: boolean }) {
   const ref = useRef<HTMLCanvasElement>(null)
   useEffect(() => {
     const canvas = ref.current
@@ -442,15 +428,23 @@ function ImagePreview({ dataUrl, color, size }: { dataUrl: string; color: string
     ctx.clearRect(0, 0, s, s)
     const img = new Image()
     img.onload = () => {
-      ctx.fillStyle = color
-      ctx.fillRect(0, 0, s, s)
-      ctx.globalCompositeOperation = 'destination-in'
-      ctx.drawImage(img, 0, 0, s, s)
+      if (isRaw) {
+        ctx.drawImage(img, 0, 0, s, s)
+      } else {
+        ctx.fillStyle = color
+        ctx.fillRect(0, 0, s, s)
+        ctx.globalCompositeOperation = 'destination-in'
+        ctx.drawImage(img, 0, 0, s, s)
+      }
     }
     img.src = dataUrl
-  }, [dataUrl, color, size])
+  }, [dataUrl, color, size, isRaw])
   return <canvas ref={ref} style={{ display: 'block', pointerEvents: 'none' }} />
 }
+
+// ─── Main component ───────────────────────────────────────────────────────────
+
+type Group = { id: string; memberIds: string[] }
 
 export default function IconBuilder({ isPremium = false }: { isPremium?: boolean }) {
   const canvasRef    = useRef<HTMLDivElement>(null)
@@ -459,35 +453,78 @@ export default function IconBuilder({ isPremium = false }: { isPremium?: boolean
   const elementRefs  = useRef<Map<string, HTMLDivElement>>(new Map())
   const [selectionSize, setSelectionSize] = useState<{ w: number; h: number } | null>(null)
 
-  const [elements,     setElements]     = useState<CanvasElement[]>(() => {
+  const [elements, setElements] = useState<CanvasElement[]>(() => {
     try {
       const s = localStorage.getItem('rl-icon-builder')
       if (s) return JSON.parse(s).elements ?? []
     } catch {}
     return []
   })
-  const [bgColor,      setBgColor]      = useState(() => {
+  const [bgColor, setBgColor] = useState(() => {
     try {
       const s = localStorage.getItem('rl-icon-builder')
       if (s) return JSON.parse(s).bgColor ?? '#0a0a0a'
     } catch {}
     return '#0a0a0a'
   })
+  const [groups, setGroups] = useState<Group[]>(() => {
+    try {
+      const s = localStorage.getItem('rl-icon-builder')
+      if (s) return JSON.parse(s).groups ?? []
+    } catch {}
+    return []
+  })
 
-  // Refs tracking latest state for use in stable event handlers / history
-  const elementsRef  = useRef(elements)
-  const bgColorRef   = useRef(bgColor)
-  const selectedIdRef = useRef<string | null>(null)
-  useEffect(() => { elementsRef.current = elements }, [elements])
-  useEffect(() => { bgColorRef.current = bgColor }, [bgColor])
+  // Multi-select: all currently selected element IDs
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
 
-  // Undo / redo history stored in refs so pushing doesn't trigger renders
-  const historyStack = useRef<Array<{ elements: CanvasElement[]; bgColor: string }>>([])
+  const [showEmojis,   setShowEmojis]   = useState(false)
+  const [showText,     setShowText]     = useState(false)
+  const [pickerTab,    setPickerTab]    = useState<'emoji' | 'symbols'>('emoji')
+  const [emojiGroup,   setEmojiGroup]   = useState(0)
+  const [symbolGroup,  setSymbolGroup]  = useState(0)
+  const [textInput,    setTextInput]    = useState('')
+  const [textColor,    setTextColor]    = useState('#ffffff')
+  const [selectedFont, setSelectedFont] = useState(FONTS[0].value)
+  const [uploading,    setUploading]    = useState(false)
+  const imageInputRef    = useRef<HTMLInputElement>(null)
+  const rawImageInputRef = useRef<HTMLInputElement>(null)
+  const [snapLines,    setSnapLines]    = useState<{ axis: 'x'|'y'; pos: number }[]>([])
+  const [zoomDevice,   setZoomDevice]   = useState<'iphone'|'android'|null>(null)
+
+  const imageCacheRef = useRef<Map<string, HTMLImageElement>>(new Map())
+  const [zoomIconUrl, setZoomIconUrl] = useState<string | null>(null)
+
+  const [dragging, setDragging] = useState<{
+    id: string
+    startX: number; startY: number
+    origPositions: Map<string, { x: number; y: number }>
+  } | null>(null)
+  const [resizing, setResizing] = useState<{
+    id: string; centerX: number; centerY: number; origSize: number; origDist: number
+  } | null>(null)
+  const [rotating, setRotating] = useState<{
+    id: string; centerX: number; centerY: number; startAngle: number; origRotation: number
+  } | null>(null)
+
+  // ── Refs for latest state (used in stable event handlers / history) ──────
+  const elementsRef   = useRef(elements)
+  const bgColorRef    = useRef(bgColor)
+  const groupsRef     = useRef(groups)
+  const selectedIdsRef = useRef(selectedIds)
+  useEffect(() => { elementsRef.current   = elements },   [elements])
+  useEffect(() => { bgColorRef.current    = bgColor },    [bgColor])
+  useEffect(() => { groupsRef.current     = groups },     [groups])
+  useEffect(() => { selectedIdsRef.current = selectedIds }, [selectedIds])
+
+  // ── Undo / redo ───────────────────────────────────────────────────────────
+  type Snap = { elements: CanvasElement[]; bgColor: string; groups: Group[] }
+  const historyStack = useRef<Snap[]>([])
   const historyIdx   = useRef(-1)
 
-  function pushHistory(els: CanvasElement[], bg: string) {
+  function pushHistory(els: CanvasElement[], bg: string, grps: Group[]) {
     const next = historyStack.current.slice(0, historyIdx.current + 1)
-    next.push({ elements: els, bgColor: bg })
+    next.push({ elements: els, bgColor: bg, groups: grps })
     if (next.length > 50) next.splice(0, 1)
     historyStack.current = next
     historyIdx.current   = next.length - 1
@@ -499,6 +536,8 @@ export default function IconBuilder({ isPremium = false }: { isPremium?: boolean
     const snap = historyStack.current[historyIdx.current]
     setElements(snap.elements)
     setBgColor(snap.bgColor)
+    setGroups(snap.groups)
+    setSelectedIds([])
   }
 
   function redo() {
@@ -507,44 +546,49 @@ export default function IconBuilder({ isPremium = false }: { isPremium?: boolean
     const snap = historyStack.current[historyIdx.current]
     setElements(snap.elements)
     setBgColor(snap.bgColor)
+    setGroups(snap.groups)
+    setSelectedIds([])
   }
 
-  // Seed history with the initial loaded state
-  useEffect(() => { pushHistory(elementsRef.current, bgColorRef.current) }, [])
-  const [selectedId,   setSelectedId]   = useState<string | null>(null)
-  // Keep ref in sync so keyboard / history handlers always see the current selection
-  useEffect(() => { selectedIdRef.current = selectedId }, [selectedId])
-  const [showEmojis,   setShowEmojis]   = useState(false)
-  const [showText,     setShowText]     = useState(false)
-  const [pickerTab,    setPickerTab]    = useState<'emoji' | 'symbols'>('emoji')
-  const [emojiGroup,   setEmojiGroup]   = useState(0)
-  const [symbolGroup,  setSymbolGroup]  = useState(0)
-  const [textInput,     setTextInput]    = useState('')
-  const [textColor,     setTextColor]    = useState('#ffffff')
-  const [selectedFont,  setSelectedFont] = useState(FONTS[0].value)
-  const [uploading,     setUploading]    = useState(false)
-  const imageInputRef = useRef<HTMLInputElement>(null)
-  const [snapLines,    setSnapLines]    = useState<{ axis: 'x'|'y'; pos: number }[]>([])
-  const [zoomDevice,   setZoomDevice]   = useState<'iphone'|'android'|null>(null)
+  useEffect(() => { pushHistory(elementsRef.current, bgColorRef.current, groupsRef.current) }, [])
 
-  const imageCacheRef = useRef<Map<string, HTMLImageElement>>(new Map())
-  const [zoomIconUrl, setZoomIconUrl] = useState<string | null>(null)
+  // ── Group helpers ─────────────────────────────────────────────────────────
 
-  const [dragging, setDragging] = useState<{
-    id: string; startX: number; startY: number; origX: number; origY: number
-  } | null>(null)
-  const [resizing, setResizing] = useState<{
-    id: string; centerX: number; centerY: number; origSize: number; origDist: number
-  } | null>(null)
-  const [rotating, setRotating] = useState<{
-    id: string; centerX: number; centerY: number; startAngle: number; origRotation: number
-  } | null>(null)
+  function getGroupMembersOf(id: string): string[] | null {
+    const g = groupsRef.current.find(g => g.memberIds.includes(id))
+    return g ? g.memberIds : null
+  }
 
-  const selected = elements.find(e => e.id === selectedId) ?? null
+  function groupSelected() {
+    const ids = selectedIdsRef.current
+    if (ids.length < 2) return
+    const newGroup: Group = { id: crypto.randomUUID(), memberIds: [...ids] }
+    const newGroups = [...groupsRef.current, newGroup]
+    setGroups(newGroups)
+    pushHistory(elementsRef.current, bgColorRef.current, newGroups)
+  }
+
+  function ungroupSelected() {
+    const ids = selectedIdsRef.current
+    const newGroups = groupsRef.current.filter(g => !g.memberIds.some(id => ids.includes(id)))
+    setGroups(newGroups)
+    pushHistory(elementsRef.current, bgColorRef.current, newGroups)
+  }
+
+  // Whether the current selection is part of an existing group
+  const selectionIsGroup = selectedIds.length > 1 &&
+    groups.some(g => selectedIds.every(id => g.memberIds.includes(id)) && g.memberIds.length === selectedIds.length)
+
+  // ── Single selected element (for property controls) ───────────────────────
+  const selected = selectedIds.length === 1
+    ? (elements.find(e => e.id === selectedIds[0]) ?? null)
+    : null
 
   function update(id: string, patch: Partial<CanvasElement>) {
     setElements(prev => prev.map(e => e.id === id ? { ...e, ...patch } : e))
   }
+
+  // ── Add elements ──────────────────────────────────────────────────────────
 
   function addEmoji(emoji: string) {
     const el: CanvasElement = {
@@ -553,9 +597,9 @@ export default function IconBuilder({ isPremium = false }: { isPremium?: boolean
     }
     const newEls = [...elementsRef.current, el]
     setElements(newEls)
-    setSelectedId(el.id)
+    setSelectedIds([el.id])
     setShowEmojis(false)
-    pushHistory(newEls, bgColorRef.current)
+    pushHistory(newEls, bgColorRef.current, groupsRef.current)
   }
 
   function addText() {
@@ -566,26 +610,26 @@ export default function IconBuilder({ isPremium = false }: { isPremium?: boolean
     }
     const newEls = [...elementsRef.current, el]
     setElements(newEls)
-    setSelectedId(el.id)
+    setSelectedIds([el.id])
     setTextInput('')
     setShowText(false)
-    pushHistory(newEls, bgColorRef.current)
+    pushHistory(newEls, bgColorRef.current, groupsRef.current)
   }
 
-  async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>, isRaw: boolean) {
     const file = e.target.files?.[0]
     if (!file) return
     setUploading(true)
     try {
-      const dataUrl = await processImageToSilhouette(file)
+      const dataUrl = isRaw ? await readDataUrl(file) : await processImageToSilhouette(file)
       const el: CanvasElement = {
-        id: crypto.randomUUID(), type: 'image', content: file.name, dataUrl,
+        id: crypto.randomUUID(), type: 'image', content: file.name, dataUrl, isRaw,
         x: CANVAS_SIZE / 2, y: CANVAS_SIZE / 2, fontSize: 300, rotation: 0, color: '#ffffff',
       }
       const newEls = [...elementsRef.current, el]
       setElements(newEls)
-      setSelectedId(el.id)
-      pushHistory(newEls, bgColorRef.current)
+      setSelectedIds([el.id])
+      pushHistory(newEls, bgColorRef.current, groupsRef.current)
     } finally {
       setUploading(false)
       e.target.value = ''
@@ -593,44 +637,64 @@ export default function IconBuilder({ isPremium = false }: { isPremium?: boolean
   }
 
   function deleteSelected() {
-    if (!selectedIdRef.current) return
-    const newEls = elementsRef.current.filter(e => e.id !== selectedIdRef.current)
+    const ids = selectedIdsRef.current
+    if (ids.length === 0) return
+    const newEls = elementsRef.current.filter(e => !ids.includes(e.id))
+    const newGroups = groupsRef.current
+      .map(g => ({ ...g, memberIds: g.memberIds.filter(id => !ids.includes(id)) }))
+      .filter(g => g.memberIds.length > 1)
     setElements(newEls)
-    setSelectedId(null)
-    pushHistory(newEls, bgColorRef.current)
+    setGroups(newGroups)
+    setSelectedIds([])
+    pushHistory(newEls, bgColorRef.current, newGroups)
   }
 
   function duplicate() {
-    const sel = elementsRef.current.find(e => e.id === selectedIdRef.current)
-    if (!sel) return
-    const copy: CanvasElement = { ...sel, id: crypto.randomUUID(), x: sel.x + 30, y: sel.y + 30 }
-    const newEls = [...elementsRef.current, copy]
+    const ids = selectedIdsRef.current
+    if (ids.length === 0) return
+    const copies: CanvasElement[] = []
+    for (const id of ids) {
+      const el = elementsRef.current.find(e => e.id === id)
+      if (!el) continue
+      copies.push({ ...el, id: crypto.randomUUID(), x: el.x + 30, y: el.y + 30 })
+    }
+    const newEls = [...elementsRef.current, ...copies]
     setElements(newEls)
-    setSelectedId(copy.id)
-    pushHistory(newEls, bgColorRef.current)
+    setSelectedIds(copies.map(c => c.id))
+    // If duplicating a group, create a new group for the copies
+    if (selectionIsGroup && copies.length > 1) {
+      const newGroup: Group = { id: crypto.randomUUID(), memberIds: copies.map(c => c.id) }
+      const newGroups = [...groupsRef.current, newGroup]
+      setGroups(newGroups)
+      pushHistory(newEls, bgColorRef.current, newGroups)
+    } else {
+      pushHistory(newEls, bgColorRef.current, groupsRef.current)
+    }
   }
 
   function bringForward() {
-    if (!selectedId) return
+    if (!selected) return
     setElements(prev => {
-      const i = prev.findIndex(e => e.id === selectedId)
+      const i = prev.findIndex(e => e.id === selected.id)
       if (i >= prev.length - 1) return prev
       const a = [...prev];[a[i], a[i + 1]] = [a[i + 1], a[i]]
-      pushHistory(a, bgColorRef.current)
+      pushHistory(a, bgColorRef.current, groupsRef.current)
       return a
     })
   }
 
   function sendBack() {
-    if (!selectedId) return
+    if (!selected) return
     setElements(prev => {
-      const i = prev.findIndex(e => e.id === selectedId)
+      const i = prev.findIndex(e => e.id === selected.id)
       if (i <= 0) return prev
       const a = [...prev];[a[i - 1], a[i]] = [a[i], a[i - 1]]
-      pushHistory(a, bgColorRef.current)
+      pushHistory(a, bgColorRef.current, groupsRef.current)
       return a
     })
   }
+
+  // ── Canvas helpers ────────────────────────────────────────────────────────
 
   function getCenterScreen(el: CanvasElement) {
     const rect = canvasRef.current!.getBoundingClientRect()
@@ -639,9 +703,40 @@ export default function IconBuilder({ isPremium = false }: { isPremium?: boolean
 
   function onElementMouseDown(e: React.MouseEvent, id: string) {
     e.stopPropagation()
-    setSelectedId(id)
-    const el = elements.find(el => el.id === id)!
-    setDragging({ id, startX: e.clientX, startY: e.clientY, origX: el.x, origY: el.y })
+
+    // Determine which IDs should move together
+    const groupMembers = getGroupMembersOf(id)
+    let newSelection: string[]
+
+    if (e.shiftKey) {
+      // Shift+click: toggle this element (and its group members) in/out of selection
+      const toggling = groupMembers ?? [id]
+      const alreadyIn = toggling.some(tid => selectedIdsRef.current.includes(tid))
+      newSelection = alreadyIn
+        ? selectedIdsRef.current.filter(sid => !toggling.includes(sid))
+        : [...new Set([...selectedIdsRef.current, ...toggling])]
+    } else {
+      // Normal click: select this element's group (or just this element)
+      newSelection = groupMembers ?? [id]
+    }
+
+    setSelectedIds(newSelection)
+
+    // Record start positions for all moving elements
+    const movingIds = newSelection.includes(id)
+      ? newSelection
+      : (groupMembers ?? [id])
+
+    const origPositions = new Map(
+      movingIds
+        .map(eid => {
+          const el = elementsRef.current.find(el => el.id === eid)
+          return el ? [eid, { x: el.x, y: el.y }] as [string, { x: number; y: number }] : null
+        })
+        .filter(Boolean) as [string, { x: number; y: number }][]
+    )
+
+    setDragging({ id, startX: e.clientX, startY: e.clientY, origPositions })
   }
 
   function onResizeMouseDown(e: React.MouseEvent, id: string) {
@@ -668,25 +763,37 @@ export default function IconBuilder({ isPremium = false }: { isPremium?: boolean
 
     function onMouseMove(e: MouseEvent) {
       if (dragging) {
-        const dx  = (e.clientX - dragging.startX) / SCALE
-        const dy  = (e.clientY - dragging.startY) / SCALE
-        let newX  = Math.max(0, Math.min(CANVAS_SIZE, dragging.origX + dx))
-        let newY  = Math.max(0, Math.min(CANVAS_SIZE, dragging.origY + dy))
+        const dx = (e.clientX - dragging.startX) / SCALE
+        const dy = (e.clientY - dragging.startY) / SCALE
 
-        const others  = elements.filter(el => el.id !== dragging.id)
-        const snapX   = [0, CANVAS_SIZE / 2, CANVAS_SIZE, ...others.map(el => el.x)]
-        const snapY   = [0, CANVAS_SIZE / 2, CANVAS_SIZE, ...others.map(el => el.y)]
-        const sx      = snap(newX, snapX)
-        const sy      = snap(newY, snapY)
-        newX = sx.val
-        newY = sy.val
+        // Apply snap to the primary dragged element only
+        const primaryOrig = dragging.origPositions.get(dragging.id)
+        const isSingle    = dragging.origPositions.size === 1
 
-        const lines: { axis: 'x'|'y'; pos: number }[] = []
-        if (sx.snapped !== null) lines.push({ axis: 'x', pos: sx.snapped })
-        if (sy.snapped !== null) lines.push({ axis: 'y', pos: sy.snapped })
-        setSnapLines(lines)
+        let snapDx = dx, snapDy = dy
+        if (isSingle && primaryOrig) {
+          const others = elements.filter(el => el.id !== dragging.id)
+          const snapX  = [0, CANVAS_SIZE / 2, CANVAS_SIZE, ...others.map(el => el.x)]
+          const snapY  = [0, CANVAS_SIZE / 2, CANVAS_SIZE, ...others.map(el => el.y)]
+          const sx     = snap(primaryOrig.x + dx, snapX)
+          const sy     = snap(primaryOrig.y + dy, snapY)
+          snapDx = sx.val - primaryOrig.x
+          snapDy = sy.val - primaryOrig.y
+          const lines: { axis: 'x'|'y'; pos: number }[] = []
+          if (sx.snapped !== null) lines.push({ axis: 'x', pos: sx.snapped })
+          if (sy.snapped !== null) lines.push({ axis: 'y', pos: sy.snapped })
+          setSnapLines(lines)
+        }
 
-        update(dragging.id, { x: newX, y: newY })
+        setElements(prev => prev.map(el => {
+          const orig = dragging.origPositions.get(el.id)
+          if (!orig) return el
+          return {
+            ...el,
+            x: Math.max(0, Math.min(CANVAS_SIZE, orig.x + snapDx)),
+            y: Math.max(0, Math.min(CANVAS_SIZE, orig.y + snapDy)),
+          }
+        }))
       }
       if (resizing) {
         const dist = Math.hypot(e.clientX - resizing.centerX, e.clientY - resizing.centerY)
@@ -697,15 +804,16 @@ export default function IconBuilder({ isPremium = false }: { isPremium?: boolean
         update(rotating.id, { rotation: rotating.origRotation + (angle - rotating.startAngle) })
       }
     }
+
     function onMouseUp() {
       const wasBusy = dragging || resizing || rotating
       setDragging(null)
       setResizing(null)
       setRotating(null)
       setSnapLines([])
-      // Push history after React processes the final position update
-      if (wasBusy) setTimeout(() => pushHistory(elementsRef.current, bgColorRef.current), 0)
+      if (wasBusy) setTimeout(() => pushHistory(elementsRef.current, bgColorRef.current, groupsRef.current), 0)
     }
+
     window.addEventListener('mousemove', onMouseMove)
     window.addEventListener('mouseup', onMouseUp)
     return () => {
@@ -714,7 +822,7 @@ export default function IconBuilder({ isPremium = false }: { isPremium?: boolean
     }
   }, [dragging, resizing, rotating, elements])
 
-  // Keyboard shortcuts — set up once, functions accessed via a ref so no stale closure
+  // ── Keyboard shortcuts ────────────────────────────────────────────────────
   const kbRef = useRef({ undo, redo, duplicate })
   kbRef.current = { undo, redo, duplicate }
   useEffect(() => {
@@ -729,26 +837,25 @@ export default function IconBuilder({ isPremium = false }: { isPremium?: boolean
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [])
 
-  // Measure the selected element's actual rendered size for the selection overlay
+  // ── Measure selected element for overlay ─────────────────────────────────
   useEffect(() => {
-    if (!selectedId) { setSelectionSize(null); return }
-    const node = elementRefs.current.get(selectedId)
+    if (selectedIds.length !== 1) { setSelectionSize(null); return }
+    const node = elementRefs.current.get(selectedIds[0])
     if (node) setSelectionSize({ w: node.offsetWidth, h: node.offsetHeight })
-  }, [selectedId, elements])
+  }, [selectedIds, elements])
 
-  // Persist design to localStorage so a refresh doesn't lose work
+  // ── Persist to localStorage ───────────────────────────────────────────────
   useEffect(() => {
-    try { localStorage.setItem('rl-icon-builder', JSON.stringify({ elements, bgColor })) } catch {}
-  }, [elements, bgColor])
+    try { localStorage.setItem('rl-icon-builder', JSON.stringify({ elements, bgColor, groups })) } catch {}
+  }, [elements, bgColor, groups])
 
-  // Update device preview canvases (preload images first so they appear)
+  // ── Device preview canvases ───────────────────────────────────────────────
   useEffect(() => {
     let cancelled = false
     preloadImages(elements).then(cache => {
       if (cancelled) return
       imageCacheRef.current = cache
-      const targets = [{ ref: iphoneRef, size: 60 }, { ref: androidRef, size: 57 }]
-      for (const { ref, size } of targets) {
+      for (const { ref, size } of [{ ref: iphoneRef, size: 60 }, { ref: androidRef, size: 57 }]) {
         const src = ref.current
         if (!src) continue
         const dst = src.getContext('2d')!
@@ -760,7 +867,6 @@ export default function IconBuilder({ isPremium = false }: { isPremium?: boolean
     return () => { cancelled = true }
   }, [elements, bgColor])
 
-  // Pre-render zoom icon when modal opens
   useEffect(() => {
     if (!zoomDevice || elements.length === 0) { setZoomIconUrl(null); return }
     let cancelled = false
@@ -771,6 +877,7 @@ export default function IconBuilder({ isPremium = false }: { isPremium?: boolean
     return () => { cancelled = true }
   }, [zoomDevice, elements, bgColor])
 
+  // ── Export ────────────────────────────────────────────────────────────────
   function download(canvas: HTMLCanvasElement, filename: string) {
     const a = document.createElement('a')
     a.download = filename
@@ -783,30 +890,20 @@ export default function IconBuilder({ isPremium = false }: { isPremium?: boolean
   async function exportDark()   { await document.fonts.ready; const ic = await preloadImages(elements); download(renderIcon(elements, '#000000', CANVAS_SIZE, false, wm, ic), 'icon-dark.png')   }
   async function exportTinted() { await document.fonts.ready; const ic = await preloadImages(elements); download(renderIcon(elements, '#000000', CANVAS_SIZE, true,  wm, ic), 'icon-tinted.png') }
 
-  // Phone grid helper
-  function phoneGrid(icons: typeof IPHONE_ICONS, yourIconIdx: number, iconSize: number, radius: number, gap: number, cols: number) {
-    const rows: React.ReactElement[] = []
-    let idx = 0
-    for (let r = 0; r < Math.ceil(icons.length / cols); r++) {
-      const cells: React.ReactElement[] = []
-      for (let c = 0; c < cols; c++) {
-        const isYours = idx === yourIconIdx
-        cells.push(
-          <div key={c} style={{ width: iconSize, height: iconSize, borderRadius: radius, overflow: 'hidden', flexShrink: 0 }}>
-            {isYours
-              ? <canvas ref={r === Math.floor(yourIconIdx / cols) && c === yourIconIdx % cols ? (yourIconIdx === 0 ? iphoneRef : androidRef) : undefined}
-                  width={60} height={60} style={{ width: iconSize, height: iconSize, display: 'block' }} />
-              : <AppIconCell bg={icons[idx]?.bg ?? '#333'} e={icons[idx]?.e ?? ''} size={iconSize} radius={radius} />
-            }
-          </div>
-        )
-        idx++
-      }
-      rows.push(<div key={r} style={{ display: 'flex', gap, justifyContent: 'center' }}>{cells}</div>)
-    }
-    return rows
-  }
+  // ── Multi-select bounding box (canvas coordinates) ────────────────────────
+  const multiSelectBox = useMemo(() => {
+    if (selectedIds.length <= 1) return null
+    const sel = elements.filter(e => selectedIds.includes(e.id))
+    if (sel.length === 0) return null
+    const half = (el: CanvasElement) => el.fontSize / 2
+    const left   = Math.min(...sel.map(el => el.x - half(el))) * SCALE
+    const top    = Math.min(...sel.map(el => el.y - half(el))) * SCALE
+    const right  = Math.max(...sel.map(el => el.x + half(el))) * SCALE
+    const bottom = Math.max(...sel.map(el => el.y + half(el))) * SCALE
+    return { left, top, width: right - left, height: bottom - top }
+  }, [selectedIds, elements])
 
+  // ─────────────────────────────────────────────────────────────────────────
   return (
     <div className="space-y-5">
 
@@ -816,12 +913,12 @@ export default function IconBuilder({ isPremium = false }: { isPremium?: boolean
           <span className="text-xs text-gray-400">Background</span>
           <input type="color" value={bgColor}
             onChange={e => setBgColor(e.target.value)}
-            onBlur={() => pushHistory(elementsRef.current, bgColorRef.current)}
+            onBlur={() => pushHistory(elementsRef.current, bgColorRef.current, groupsRef.current)}
             className="w-8 h-8 rounded cursor-pointer bg-transparent border-0" />
         </div>
         <div className="w-px h-5 bg-gray-700" />
-        <button onClick={undo} title="Undo (⌘Z)" className="px-2.5 py-1.5 bg-gray-800 hover:bg-gray-700 text-white text-sm rounded-lg">↩</button>
-        <button onClick={redo} title="Redo (⇧⌘Z)" className="px-2.5 py-1.5 bg-gray-800 hover:bg-gray-700 text-white text-sm rounded-lg">↪</button>
+        <button onClick={undo} title="Undo (⌘Z)"   className="px-2.5 py-1.5 bg-gray-800 hover:bg-gray-700 text-white text-sm rounded-lg">↩</button>
+        <button onClick={redo} title="Redo (⇧⌘Z)"  className="px-2.5 py-1.5 bg-gray-800 hover:bg-gray-700 text-white text-sm rounded-lg">↪</button>
         <div className="w-px h-5 bg-gray-700" />
         <button onClick={() => { setShowEmojis(v => !v); setShowText(false) }}
           className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${showEmojis ? 'bg-white text-black' : 'bg-gray-800 hover:bg-gray-700 text-white'}`}>
@@ -831,12 +928,19 @@ export default function IconBuilder({ isPremium = false }: { isPremium?: boolean
           className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${showText ? 'bg-white text-black' : 'bg-gray-800 hover:bg-gray-700 text-white'}`}>
           + Text
         </button>
+
+        {/* Upload buttons */}
         {isPremium ? (
           <>
-            <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
+            <input ref={imageInputRef}    type="file" accept="image/*" className="hidden" onChange={e => handleImageUpload(e, false)} />
+            <input ref={rawImageInputRef} type="file" accept="image/*" className="hidden" onChange={e => handleImageUpload(e, true)}  />
             <button onClick={() => imageInputRef.current?.click()} disabled={uploading}
               className="px-3 py-1.5 text-sm rounded-lg transition-colors bg-gray-800 hover:bg-gray-700 text-white disabled:opacity-50">
-              {uploading ? 'Processing…' : '+ Image'}
+              {uploading ? 'Processing…' : 'Upload as Icon'}
+            </button>
+            <button onClick={() => rawImageInputRef.current?.click()} disabled={uploading}
+              className="px-3 py-1.5 text-sm rounded-lg transition-colors bg-gray-800 hover:bg-gray-700 text-white disabled:opacity-50">
+              Upload Image
             </button>
           </>
         ) : (
@@ -845,31 +949,55 @@ export default function IconBuilder({ isPremium = false }: { isPremium?: boolean
             <span className="text-xs">✦</span> Image <span className="text-[10px] text-purple-400 font-medium">Premium</span>
           </a>
         )}
-        {selected && (
+
+        {/* Selection-dependent controls */}
+        {selectedIds.length > 0 && (
           <>
             <div className="w-px h-5 bg-gray-700" />
-            <button onClick={sendBack}    className="px-2.5 py-1.5 bg-gray-800 hover:bg-gray-700 text-white text-sm rounded-lg">↓ Back</button>
-            <button onClick={bringForward} className="px-2.5 py-1.5 bg-gray-800 hover:bg-gray-700 text-white text-sm rounded-lg">↑ Forward</button>
-            <button onClick={duplicate} title="Duplicate (⌘D)" className="px-2.5 py-1.5 bg-gray-800 hover:bg-gray-700 text-white text-sm rounded-lg">⎘ Duplicate</button>
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs text-gray-400">Colour</span>
-              <input type="color" value={selected.color}
-                onChange={e => update(selected.id, { color: e.target.value })}
-                onBlur={() => pushHistory(elementsRef.current, bgColorRef.current)}
-                className="w-7 h-7 rounded cursor-pointer bg-transparent border-0" />
-            </div>
-            {selected.type === 'text' && (
-              <select value={selected.fontFamily ?? FONTS[0].value}
-                onChange={e => update(selected.id, { fontFamily: e.target.value })}
-                className="bg-gray-800 text-white text-xs px-2 py-1.5 rounded-lg border border-gray-700 focus:outline-none focus:border-gray-500">
-                {FONTS.map(f => (
-                  <option key={f.value} value={f.value}>{f.label}</option>
-                ))}
-              </select>
+            {selectedIds.length > 1 && !selectionIsGroup && (
+              <button onClick={groupSelected} className="px-2.5 py-1.5 bg-gray-800 hover:bg-gray-700 text-white text-sm rounded-lg">
+                ⛶ Group
+              </button>
             )}
-            <button onClick={deleteSelected} className="px-2.5 py-1.5 bg-red-950 hover:bg-red-900 text-red-400 text-sm rounded-lg">Delete</button>
+            {selectionIsGroup && (
+              <button onClick={ungroupSelected} className="px-2.5 py-1.5 bg-gray-800 hover:bg-gray-700 text-white text-sm rounded-lg">
+                ⛶ Ungroup
+              </button>
+            )}
+            <button onClick={duplicate} title="Duplicate (⌘D)" className="px-2.5 py-1.5 bg-gray-800 hover:bg-gray-700 text-white text-sm rounded-lg">⎘ Duplicate</button>
+
+            {/* Single-element controls */}
+            {selected && (
+              <>
+                <button onClick={sendBack}     className="px-2.5 py-1.5 bg-gray-800 hover:bg-gray-700 text-white text-sm rounded-lg">↓ Back</button>
+                <button onClick={bringForward} className="px-2.5 py-1.5 bg-gray-800 hover:bg-gray-700 text-white text-sm rounded-lg">↑ Forward</button>
+                {!selected.isRaw && (
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs text-gray-400">Colour</span>
+                    <input type="color" value={selected.color}
+                      onChange={e => update(selected.id, { color: e.target.value })}
+                      onBlur={() => pushHistory(elementsRef.current, bgColorRef.current, groupsRef.current)}
+                      className="w-7 h-7 rounded cursor-pointer bg-transparent border-0" />
+                  </div>
+                )}
+                {selected.type === 'text' && (
+                  <select value={selected.fontFamily ?? FONTS[0].value}
+                    onChange={e => update(selected.id, { fontFamily: e.target.value })}
+                    className="bg-gray-800 text-white text-xs px-2 py-1.5 rounded-lg border border-gray-700 focus:outline-none focus:border-gray-500">
+                    {FONTS.map(f => (
+                      <option key={f.value} value={f.value}>{f.label}</option>
+                    ))}
+                  </select>
+                )}
+              </>
+            )}
+
+            <button onClick={deleteSelected} className="px-2.5 py-1.5 bg-red-950 hover:bg-red-900 text-red-400 text-sm rounded-lg">
+              {selectedIds.length > 1 ? `Delete (${selectedIds.length})` : 'Delete'}
+            </button>
           </>
         )}
+
         <div className="ml-auto flex items-center gap-2">
           <button onClick={exportPng}    className="px-3 py-1.5 bg-white hover:bg-gray-200 text-black text-sm font-semibold rounded-lg transition-colors">Export</button>
           <button onClick={exportDark}   className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-white text-sm font-semibold rounded-lg border border-gray-700 transition-colors">Dark</button>
@@ -943,7 +1071,7 @@ export default function IconBuilder({ isPremium = false }: { isPremium?: boolean
 
       {elements.length > 0 && (
         <p className="text-xs text-gray-600 text-center">
-          Drag to move · <span className="text-gray-500">○</span> rotate · <span className="text-gray-500">□</span> resize · elements snap to centre and each other
+          Drag to move · <span className="text-gray-500">○</span> rotate · <span className="text-gray-500">□</span> resize · Shift+click to multi-select · ⌘D duplicate
         </p>
       )}
 
@@ -956,7 +1084,7 @@ export default function IconBuilder({ isPremium = false }: { isPremium?: boolean
             ref={canvasRef}
             className="relative select-none rounded-2xl border border-gray-800"
             style={{ width: DISPLAY_SIZE, height: DISPLAY_SIZE, backgroundColor: bgColor, overflow: 'hidden', transform: 'translateZ(0)' }}
-            onClick={() => setSelectedId(null)}
+            onClick={() => setSelectedIds([])}
           >
             {/* Snap guide lines */}
             {snapLines.map((line, i) => (
@@ -976,7 +1104,7 @@ export default function IconBuilder({ isPremium = false }: { isPremium?: boolean
             )}
 
             {elements.map(el => {
-              const isSel = selectedId === el.id
+              const isSel = selectedIds.includes(el.id)
               const isImg = el.type === 'image'
               return (
                 <div key={el.id}
@@ -995,18 +1123,20 @@ export default function IconBuilder({ isPremium = false }: { isPremium?: boolean
                     fontFamily: el.type === 'text' ? (el.fontFamily ?? FONTS[0].value) : undefined,
                     fontWeight: el.type === 'text' ? (FONTS.find(f => f.value === el.fontFamily)?.weight ?? 'bold') : undefined,
                     zIndex: isSel ? 10 : undefined,
+                    outline: isSel && selectedIds.length > 1 ? '1.5px dashed rgba(59,130,246,0.5)' : undefined,
+                    outlineOffset: '3px',
                   }}
                   onMouseDown={e => onElementMouseDown(e, el.id)}
                   onClick={e => e.stopPropagation()}
                 >
                   {isImg && el.dataUrl ? (
-                    <ImagePreview dataUrl={el.dataUrl} color={el.color} size={el.fontSize * SCALE} />
+                    <ImagePreview dataUrl={el.dataUrl} color={el.color} size={el.fontSize * SCALE} isRaw={el.isRaw} />
                   ) : el.content}
                 </div>
               )
             })}
 
-            {/* Unified selection overlay — measured to fit actual element bounds */}
+            {/* Single-element selection overlay */}
             {selected && selectionSize && (
               <div style={{
                 position: 'absolute', left: 0, top: 0,
@@ -1026,18 +1156,26 @@ export default function IconBuilder({ isPremium = false }: { isPremium?: boolean
                 }} onMouseDown={e => { e.stopPropagation(); onResizeMouseDown(e, selected.id) }} />
               </div>
             )}
+
+            {/* Multi-select bounding box */}
+            {multiSelectBox && (
+              <div style={{
+                position: 'absolute', pointerEvents: 'none', zIndex: 20,
+                left: multiSelectBox.left, top: multiSelectBox.top,
+                width: multiSelectBox.width, height: multiSelectBox.height,
+                border: '1.5px dashed rgba(59,130,246,0.7)',
+                borderRadius: 4,
+              }} />
+            )}
           </div>
           <p className="text-center text-xs text-gray-600 mt-2">512px preview — exports at 1024×1024</p>
         </div>
 
         {/* Device previews */}
         <div className="flex gap-6">
-
           {/* iPhone */}
           <div className="flex flex-col items-center gap-2">
-            <div
-              onClick={() => setZoomDevice('iphone')}
-              title="Click for closer look"
+            <div onClick={() => setZoomDevice('iphone')} title="Click for closer look"
               style={{
                 width: 170, height: 340, background: '#1c1c1e', borderRadius: 40,
                 border: '2px solid #3a3a3c', padding: '10px 8px 12px',
@@ -1063,9 +1201,7 @@ export default function IconBuilder({ isPremium = false }: { isPremium?: boolean
                 </div>
               ))}
               <div style={{ marginTop: 'auto', background: 'rgba(255,255,255,0.08)', borderRadius: 16, padding: '6px 8px', display: 'flex', gap: 6, justifyContent: 'center' }}>
-                {IPHONE_DOCK.map((icon, i) => (
-                  <AppIconCell key={i} bg={icon.bg} e={icon.e} size={28} radius={7} />
-                ))}
+                {IPHONE_DOCK.map((icon, i) => <AppIconCell key={i} bg={icon.bg} e={icon.e} size={28} radius={7} />)}
               </div>
             </div>
             <span className="text-xs text-gray-500">iPhone · click to zoom</span>
@@ -1073,9 +1209,7 @@ export default function IconBuilder({ isPremium = false }: { isPremium?: boolean
 
           {/* Android */}
           <div className="flex flex-col items-center gap-2">
-            <div
-              onClick={() => setZoomDevice('android')}
-              title="Click for closer look"
+            <div onClick={() => setZoomDevice('android')} title="Click for closer look"
               style={{
                 width: 170, height: 340, background: '#121212', borderRadius: 32,
                 border: '2px solid #2a2a2a', padding: '10px 8px 12px',
@@ -1101,9 +1235,7 @@ export default function IconBuilder({ isPremium = false }: { isPremium?: boolean
                 </div>
               ))}
               <div style={{ marginTop: 'auto', display: 'flex', justifyContent: 'center', gap: 6 }}>
-                {ANDROID_DOCK.map((icon, i) => (
-                  <AppIconCell key={i} bg={icon.bg} e={icon.e} size={28} radius={14} />
-                ))}
+                {ANDROID_DOCK.map((icon, i) => <AppIconCell key={i} bg={icon.bg} e={icon.e} size={28} radius={14} />)}
               </div>
             </div>
             <span className="text-xs text-gray-500">Android · click to zoom</span>
@@ -1113,10 +1245,7 @@ export default function IconBuilder({ isPremium = false }: { isPremium?: boolean
 
       {/* Zoom modal */}
       {zoomDevice && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80"
-          onClick={() => setZoomDevice(null)}
-        >
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80" onClick={() => setZoomDevice(null)}>
           <div onClick={e => e.stopPropagation()} style={{ padding: 32 }}>
             {zoomDevice === 'iphone' ? (
               <div style={{
@@ -1136,10 +1265,7 @@ export default function IconBuilder({ isPremium = false }: { isPremium?: boolean
                         <div key={i} style={{ width: 56, height: 56, borderRadius: 13, overflow: 'hidden', flexShrink: 0 }}>
                           {isYours
                             ? <div style={{ width: 56, height: 56, borderRadius: 13, overflow: 'hidden', background: bgColor, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                {zoomIconUrl
-                                  ? <img src={zoomIconUrl} style={{ width: 56, height: 56, borderRadius: 13 }} />
-                                  : <div style={{ width: 56, height: 56, background: bgColor, borderRadius: 13 }} />
-                                }
+                                {zoomIconUrl ? <img src={zoomIconUrl} style={{ width: 56, height: 56, borderRadius: 13 }} /> : <div style={{ width: 56, height: 56, background: bgColor, borderRadius: 13 }} />}
                               </div>
                             : <AppIconCell bg={icon.bg} e={icon.e} size={56} radius={13} />
                           }
@@ -1170,10 +1296,7 @@ export default function IconBuilder({ isPremium = false }: { isPremium?: boolean
                         <div key={i} style={{ width: 56, height: 56, borderRadius: 28, overflow: 'hidden', flexShrink: 0 }}>
                           {isYours
                             ? <div style={{ width: 56, height: 56, borderRadius: 28, overflow: 'hidden', background: bgColor }}>
-                                {zoomIconUrl
-                                  ? <img src={zoomIconUrl} style={{ width: 56, height: 56, borderRadius: 28 }} />
-                                  : <div style={{ width: 56, height: 56, background: bgColor }} />
-                                }
+                                {zoomIconUrl ? <img src={zoomIconUrl} style={{ width: 56, height: 56, borderRadius: 28 }} /> : <div style={{ width: 56, height: 56, background: bgColor }} />}
                               </div>
                             : <AppIconCell bg={icon.bg} e={icon.e} size={56} radius={28} />
                           }

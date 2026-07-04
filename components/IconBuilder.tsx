@@ -473,7 +473,47 @@ export default function IconBuilder({ isPremium = false }: { isPremium?: boolean
     } catch {}
     return '#0a0a0a'
   })
+
+  // Refs tracking latest state for use in stable event handlers / history
+  const elementsRef  = useRef(elements)
+  const bgColorRef   = useRef(bgColor)
+  const selectedIdRef = useRef<string | null>(null)
+  useEffect(() => { elementsRef.current = elements }, [elements])
+  useEffect(() => { bgColorRef.current = bgColor }, [bgColor])
+
+  // Undo / redo history stored in refs so pushing doesn't trigger renders
+  const historyStack = useRef<Array<{ elements: CanvasElement[]; bgColor: string }>>([])
+  const historyIdx   = useRef(-1)
+
+  function pushHistory(els: CanvasElement[], bg: string) {
+    const next = historyStack.current.slice(0, historyIdx.current + 1)
+    next.push({ elements: els, bgColor: bg })
+    if (next.length > 50) next.splice(0, 1)
+    historyStack.current = next
+    historyIdx.current   = next.length - 1
+  }
+
+  function undo() {
+    if (historyIdx.current <= 0) return
+    historyIdx.current--
+    const snap = historyStack.current[historyIdx.current]
+    setElements(snap.elements)
+    setBgColor(snap.bgColor)
+  }
+
+  function redo() {
+    if (historyIdx.current >= historyStack.current.length - 1) return
+    historyIdx.current++
+    const snap = historyStack.current[historyIdx.current]
+    setElements(snap.elements)
+    setBgColor(snap.bgColor)
+  }
+
+  // Seed history with the initial loaded state
+  useEffect(() => { pushHistory(elementsRef.current, bgColorRef.current) }, [])
   const [selectedId,   setSelectedId]   = useState<string | null>(null)
+  // Keep ref in sync so keyboard / history handlers always see the current selection
+  useEffect(() => { selectedIdRef.current = selectedId }, [selectedId])
   const [showEmojis,   setShowEmojis]   = useState(false)
   const [showText,     setShowText]     = useState(false)
   const [pickerTab,    setPickerTab]    = useState<'emoji' | 'symbols'>('emoji')
@@ -511,9 +551,11 @@ export default function IconBuilder({ isPremium = false }: { isPremium?: boolean
       id: crypto.randomUUID(), type: 'emoji', content: emoji,
       x: CANVAS_SIZE / 2, y: CANVAS_SIZE / 2, fontSize: 200, rotation: 0, color: '#ffffff',
     }
-    setElements(prev => [...prev, el])
+    const newEls = [...elementsRef.current, el]
+    setElements(newEls)
     setSelectedId(el.id)
     setShowEmojis(false)
+    pushHistory(newEls, bgColorRef.current)
   }
 
   function addText() {
@@ -522,10 +564,12 @@ export default function IconBuilder({ isPremium = false }: { isPremium?: boolean
       id: crypto.randomUUID(), type: 'text', content: textInput.trim(),
       x: CANVAS_SIZE / 2, y: CANVAS_SIZE / 2, fontSize: 120, rotation: 0, color: textColor, fontFamily: selectedFont,
     }
-    setElements(prev => [...prev, el])
+    const newEls = [...elementsRef.current, el]
+    setElements(newEls)
     setSelectedId(el.id)
     setTextInput('')
     setShowText(false)
+    pushHistory(newEls, bgColorRef.current)
   }
 
   async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -538,8 +582,10 @@ export default function IconBuilder({ isPremium = false }: { isPremium?: boolean
         id: crypto.randomUUID(), type: 'image', content: file.name, dataUrl,
         x: CANVAS_SIZE / 2, y: CANVAS_SIZE / 2, fontSize: 300, rotation: 0, color: '#ffffff',
       }
-      setElements(prev => [...prev, el])
+      const newEls = [...elementsRef.current, el]
+      setElements(newEls)
       setSelectedId(el.id)
+      pushHistory(newEls, bgColorRef.current)
     } finally {
       setUploading(false)
       e.target.value = ''
@@ -547,9 +593,21 @@ export default function IconBuilder({ isPremium = false }: { isPremium?: boolean
   }
 
   function deleteSelected() {
-    if (!selectedId) return
-    setElements(prev => prev.filter(e => e.id !== selectedId))
+    if (!selectedIdRef.current) return
+    const newEls = elementsRef.current.filter(e => e.id !== selectedIdRef.current)
+    setElements(newEls)
     setSelectedId(null)
+    pushHistory(newEls, bgColorRef.current)
+  }
+
+  function duplicate() {
+    const sel = elementsRef.current.find(e => e.id === selectedIdRef.current)
+    if (!sel) return
+    const copy: CanvasElement = { ...sel, id: crypto.randomUUID(), x: sel.x + 30, y: sel.y + 30 }
+    const newEls = [...elementsRef.current, copy]
+    setElements(newEls)
+    setSelectedId(copy.id)
+    pushHistory(newEls, bgColorRef.current)
   }
 
   function bringForward() {
@@ -557,7 +615,9 @@ export default function IconBuilder({ isPremium = false }: { isPremium?: boolean
     setElements(prev => {
       const i = prev.findIndex(e => e.id === selectedId)
       if (i >= prev.length - 1) return prev
-      const a = [...prev];[a[i], a[i + 1]] = [a[i + 1], a[i]]; return a
+      const a = [...prev];[a[i], a[i + 1]] = [a[i + 1], a[i]]
+      pushHistory(a, bgColorRef.current)
+      return a
     })
   }
 
@@ -566,7 +626,9 @@ export default function IconBuilder({ isPremium = false }: { isPremium?: boolean
     setElements(prev => {
       const i = prev.findIndex(e => e.id === selectedId)
       if (i <= 0) return prev
-      const a = [...prev];[a[i - 1], a[i]] = [a[i], a[i - 1]]; return a
+      const a = [...prev];[a[i - 1], a[i]] = [a[i], a[i - 1]]
+      pushHistory(a, bgColorRef.current)
+      return a
     })
   }
 
@@ -636,10 +698,13 @@ export default function IconBuilder({ isPremium = false }: { isPremium?: boolean
       }
     }
     function onMouseUp() {
+      const wasBusy = dragging || resizing || rotating
       setDragging(null)
       setResizing(null)
       setRotating(null)
       setSnapLines([])
+      // Push history after React processes the final position update
+      if (wasBusy) setTimeout(() => pushHistory(elementsRef.current, bgColorRef.current), 0)
     }
     window.addEventListener('mousemove', onMouseMove)
     window.addEventListener('mouseup', onMouseUp)
@@ -648,6 +713,21 @@ export default function IconBuilder({ isPremium = false }: { isPremium?: boolean
       window.removeEventListener('mouseup', onMouseUp)
     }
   }, [dragging, resizing, rotating, elements])
+
+  // Keyboard shortcuts — set up once, functions accessed via a ref so no stale closure
+  const kbRef = useRef({ undo, redo, duplicate })
+  kbRef.current = { undo, redo, duplicate }
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+      const mod = e.metaKey || e.ctrlKey
+      if (mod && !e.shiftKey && e.key.toLowerCase() === 'z') { e.preventDefault(); kbRef.current.undo() }
+      else if (mod && e.shiftKey && e.key.toLowerCase() === 'z') { e.preventDefault(); kbRef.current.redo() }
+      else if (mod && e.key.toLowerCase() === 'd') { e.preventDefault(); kbRef.current.duplicate() }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
 
   // Measure the selected element's actual rendered size for the selection overlay
   useEffect(() => {
@@ -734,9 +814,14 @@ export default function IconBuilder({ isPremium = false }: { isPremium?: boolean
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex items-center gap-2">
           <span className="text-xs text-gray-400">Background</span>
-          <input type="color" value={bgColor} onChange={e => setBgColor(e.target.value)}
+          <input type="color" value={bgColor}
+            onChange={e => setBgColor(e.target.value)}
+            onBlur={() => pushHistory(elementsRef.current, bgColorRef.current)}
             className="w-8 h-8 rounded cursor-pointer bg-transparent border-0" />
         </div>
+        <div className="w-px h-5 bg-gray-700" />
+        <button onClick={undo} title="Undo (⌘Z)" className="px-2.5 py-1.5 bg-gray-800 hover:bg-gray-700 text-white text-sm rounded-lg">↩</button>
+        <button onClick={redo} title="Redo (⇧⌘Z)" className="px-2.5 py-1.5 bg-gray-800 hover:bg-gray-700 text-white text-sm rounded-lg">↪</button>
         <div className="w-px h-5 bg-gray-700" />
         <button onClick={() => { setShowEmojis(v => !v); setShowText(false) }}
           className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${showEmojis ? 'bg-white text-black' : 'bg-gray-800 hover:bg-gray-700 text-white'}`}>
@@ -765,9 +850,12 @@ export default function IconBuilder({ isPremium = false }: { isPremium?: boolean
             <div className="w-px h-5 bg-gray-700" />
             <button onClick={sendBack}    className="px-2.5 py-1.5 bg-gray-800 hover:bg-gray-700 text-white text-sm rounded-lg">↓ Back</button>
             <button onClick={bringForward} className="px-2.5 py-1.5 bg-gray-800 hover:bg-gray-700 text-white text-sm rounded-lg">↑ Forward</button>
+            <button onClick={duplicate} title="Duplicate (⌘D)" className="px-2.5 py-1.5 bg-gray-800 hover:bg-gray-700 text-white text-sm rounded-lg">⎘ Duplicate</button>
             <div className="flex items-center gap-1.5">
               <span className="text-xs text-gray-400">Colour</span>
-              <input type="color" value={selected.color} onChange={e => update(selected.id, { color: e.target.value })}
+              <input type="color" value={selected.color}
+                onChange={e => update(selected.id, { color: e.target.value })}
+                onBlur={() => pushHistory(elementsRef.current, bgColorRef.current)}
                 className="w-7 h-7 rounded cursor-pointer bg-transparent border-0" />
             </div>
             {selected.type === 'text' && (

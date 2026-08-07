@@ -80,11 +80,11 @@ export default async function Page() {
       {/* Landing / SEO section */}
       <section className="border-t border-white/[0.06] px-4 sm:px-8 py-16 max-w-6xl mx-auto w-full">
         <div className="max-w-3xl">
-          <h2 className="text-2xl sm:text-3xl font-bold text-white tracking-tight mb-4">
-            Free app icon maker — no download, no account required
-          </h2>
+          <h1 className="text-2xl sm:text-3xl font-bold text-white tracking-tight mb-4">
+            Free app icon generator — no download, no account required
+          </h1>
           <p className="text-gray-500 text-sm leading-relaxed mb-10">
-            Icon Builder is a free, browser-based tool for creating app icons for iOS and Android.
+            Icon Builder is a free, browser-based app icon generator for iOS and Android.
             Add emojis, Unicode symbols, or custom text to a 1024×1024 canvas, then export a
             production-ready PNG in seconds. Everything runs in your browser — nothing is uploaded
             to any server.

@@ -5,11 +5,11 @@ export const metadata: Metadata = {
   metadataBase: new URL('https://icons.rabbit-loop.com'),
   icons: { icon: '/favicon.png', apple: '/favicon.png' },
   title:        'Icon Builder — Rabbit Loop',
-  description:  'Free browser-based app icon creator. Drag emojis, symbols and text onto a canvas, then export at 1024×1024 ready for iOS and Android. No account required.',
+  description:  'Free browser-based app icon generator. Drag emojis, symbols and text onto a canvas, then export at 1024×1024 ready for iOS and Android. No account required.',
   keywords:     ['app icon maker', 'icon builder', 'iOS icon', 'Android icon', 'app icon generator', 'free icon tool', 'emoji icon', '1024x1024 icon'],
   openGraph: {
     title:       'Icon Builder — Rabbit Loop',
-    description: 'Free browser-based app icon creator. Export at 1024×1024 for iOS and Android.',
+    description: 'Free browser-based app icon generator. Export at 1024×1024 for iOS and Android.',
     url:         'https://icons.rabbit-loop.com',
     siteName:    'Rabbit Loop Icon Builder',
     locale:      'en_AU',
@@ -19,7 +19,7 @@ export const metadata: Metadata = {
   twitter: {
     card:        'summary',
     title:       'Icon Builder — Rabbit Loop',
-    description: 'Free browser-based app icon creator. Export at 1024×1024 for iOS and Android.',
+    description: 'Free browser-based app icon generator. Export at 1024×1024 for iOS and Android.',
     images:      ['https://icons.rabbit-loop.com/logo.png'],
   },
 }
@@ -41,7 +41,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             '@type':             'WebApplication',
             name:                'Icon Builder',
             url:                 'https://icons.rabbit-loop.com',
-            description:         'Free browser-based app icon creator. Drag emojis, symbols and text onto a canvas and export at 1024×1024 for iOS and Android.',
+            description:         'Free browser-based app icon generator. Drag emojis, symbols and text onto a canvas and export at 1024×1024 for iOS and Android.',
             applicationCategory: 'DesignApplication',
             operatingSystem:     'Any',
             browserRequirements: 'Requires a modern browser with HTML5 Canvas support.',

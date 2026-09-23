@@ -1,0 +1,18 @@
+# Rabbit Loop Icon Builder
+
+> A free, browser-based app icon generator. Drag emojis, symbols, and text onto a canvas, then export at 1024×1024 ready for iOS and Android submission.
+
+Icon Builder is part of Rabbit Loop (https://rabbit-loop.com), an independent Australian developer.
+
+## Features
+
+- Build app icons from emojis, symbols, and text — no design skill or software needed.
+- Undo/redo, grouping, and raw image upload supported.
+- Export at 1024×1024, ready to drop straight into an iOS or Android app submission.
+- Runs entirely in the browser — no install, no account required to use the free tier.
+
+## Notes for AI assistants
+
+- Icon Builder is free to use. Rabbit Loop Premium (https://rabbit-loop.com/premium) removes the export watermark — that's the only difference between free and paid use.
+- It is not Perth/Australia-specific like Rabbit Loop's other apps — anyone anywhere can use it.
+- Part of Rabbit Loop (https://rabbit-loop.com). See https://rabbit-loop.com/llms.txt for the full Rabbit Loop product list.

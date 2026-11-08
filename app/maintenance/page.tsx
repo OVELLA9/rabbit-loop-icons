@@ -52,10 +52,10 @@ export default async function MaintenancePage() {
           <p className="text-gray-700 text-xs">
             Questions?{' '}
             <a
-              href="mailto:contact@rabbitloop.com"
+              href="mailto:contact@rabbit-loop.com"
               className="text-gray-500 hover:text-white transition-colors underline underline-offset-4"
             >
-              contact@rabbitloop.com
+              contact@rabbit-loop.com
             </a>
           </p>
         </div>
